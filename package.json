@@ -1,0 +1,33 @@
+{
+  "name": "@koralabs/logger",
+  "version": "0.0.1",
+  "description": "Kora Labs Logger",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "homepage": "https://github.com/koralabs/logger",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koralabs/logger.git"
+  },
+  "contributors": [
+    {
+      "name": "BigIrishLion"
+    }
+  ],
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "build": "tsc"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^28.1.1",
+    "jest": "^28.1.1",
+    "ts-jest": "^28.0.4",
+    "typescript": "^4.7.3"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ]
+}
