@@ -1,13 +1,11 @@
 {
-  "name": "@koralabs/logger",
+  "name": "@koralabs/kora-labs-common",
   "version": "1.0.0",
-  "description": "Kora Labs Logger",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "homepage": "https://github.com/koralabs/logger",
+  "description": "Kora Labs Common Utilities",
+  "homepage": "https://github.com/koralabs/kora-labs-common",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/koralabs/logger.git"
+    "url": "git+https://github.com/koralabs/kora-labs-common.git"
   },
   "contributors": [
     {
@@ -22,6 +20,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/jest": "^28.1.1",
+    "@types/node": "^18.11.17",
     "jest": "^28.1.1",
     "ts-jest": "^28.0.4",
     "typescript": "^4.7.3"

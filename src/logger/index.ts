@@ -1,3 +1,4 @@
+import { Environment } from "../environment";
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
 if (!('toJSON' in Error.prototype))
     Object.defineProperty(Error.prototype, 'toJSON', {
@@ -25,6 +26,20 @@ export enum LogCategory {
 }
 
 export class Logger {
+    public static application:string;
+    private static isInitialized = false;
+
+    public static async initialize(): Promise<void> {
+        if (!Logger.application) {
+            const potentialName = await Environment.getPotentialApplicationName();
+            if (!potentialName){
+                throw new Error("Logger.application must be set!");
+            }
+            Logger.application = potentialName;
+        }
+        Logger.isInitialized = true;
+    }
+
     public static log(
         args:
             | {
@@ -37,6 +52,7 @@ export class Logger {
               }
             | string
     ): void {
+        if (!Logger.isInitialized) Logger.initialize();
         if (typeof args === 'string') {
             this.log_entry(LogCategory.INFO, args);
             return;
