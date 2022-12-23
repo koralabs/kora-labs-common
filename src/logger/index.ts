@@ -18,11 +18,11 @@ if (!('toJSON' in Error.prototype))
 export enum LogCategory {
     DEBUG = 'DEBUG',
     INFO = 'INFO',
+    METRIC = 'METRIC',
     WARN = 'WARN',
     ERROR = 'ERROR',
     FATAL = 'FATAL',
-    NOTIFY = 'NOTIFY',
-    METRIC = 'METRIC'
+    NOTIFY = 'NOTIFY'
 }
 
 export class Logger {
