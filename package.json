@@ -1,7 +1,9 @@
 {
   "name": "@koralabs/kora-labs-common",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Kora Labs Common Utilities",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "homepage": "https://github.com/koralabs/kora-labs-common",
   "repository": {
     "type": "git",

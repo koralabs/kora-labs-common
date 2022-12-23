@@ -78,9 +78,7 @@ export class Logger {
         const log_dimensions =
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
         console.log(
-            `{ "category": "${
-                category ?? LogCategory.INFO
-            }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`
+            `{"application": "${Logger.application}", "category": "${category ?? LogCategory.INFO}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`
         );
     }
 }
