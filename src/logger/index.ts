@@ -77,8 +77,9 @@ export class Logger {
         const log_count = count != undefined && count != null ? `, "count": ${count}` : '';
         const log_dimensions =
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
-        console.log(
-            `{"application": "${Logger.application}", "category": "${category ?? LogCategory.INFO}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`
-        );
+
+        // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
+        console.log(`{"application": "${Logger.application}", "category": "${category ?? LogCategory.INFO}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
+        // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
     }
 }
