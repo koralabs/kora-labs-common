@@ -80,6 +80,10 @@ export class Environment {
     }
 
     public static async getPotentialApplicationName(): Promise<string|null> {
+        if (process.env.NODE_ENV == 'test') {
+            return null;
+        }
+
         if (process.env.APPLICATION_NAME){
             return process.env.APPLICATION_NAME;
         }
