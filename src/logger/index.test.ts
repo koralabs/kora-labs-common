@@ -17,6 +17,7 @@ describe('Logger Tests', () => {
         const obj = JSON.parse(call);
         expect(obj).toEqual({
             category: 'ERROR',
+            application: 'TEST',
             count: 1,
             dimensions: ['taco'],
             event: 'test.log',

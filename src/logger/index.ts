@@ -1,4 +1,4 @@
-import { Environment } from "../environment";
+import { Environment } from '../environment';
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
 if (!('toJSON' in Error.prototype))
     Object.defineProperty(Error.prototype, 'toJSON', {
@@ -26,17 +26,22 @@ export enum LogCategory {
 }
 
 export class Logger {
-    public static application:string;
+    public static application: string;
     private static isInitialized = false;
 
     public static async initialize(): Promise<void> {
-        if (!Logger.application) {
-            const potentialName = await Environment.getPotentialApplicationName();
-            if (!potentialName){
-                throw new Error("Logger.application must be set!");
+        if (process.env.NODE_ENV !== 'test') {
+            if (!Logger.application) {
+                const potentialName = await Environment.getPotentialApplicationName();
+                if (!potentialName) {
+                    throw new Error('Logger.application must be set!');
+                }
+                Logger.application = potentialName;
             }
-            Logger.application = potentialName;
+        } else {
+            Logger.application = 'TEST';
         }
+        
         Logger.isInitialized = true;
     }
 
@@ -79,7 +84,11 @@ export class Logger {
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
 
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
-        console.log(`{"application": "${Logger.application}", "category": "${category ?? LogCategory.INFO}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
+        console.log(
+            `{"application": "${Logger.application}", "category": "${
+                category ?? LogCategory.INFO
+            }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`
+        );
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
     }
 }
