@@ -25,8 +25,16 @@ export enum LogCategory {
     NOTIFY = 'NOTIFY'
 }
 
+export enum CardanoNetwork {
+    MAINNET = 'MAINNET',
+    PREPROD = 'PREPROD',
+    PREVIEW = 'PREVIEW',
+    UNSET = 'UNSET'
+}
+
 export class Logger {
     public static application: string;
+    public static network: CardanoNetwork;
     private static isInitialized = false;
 
     public static async initialize(): Promise<void> {
@@ -41,7 +49,8 @@ export class Logger {
         } else {
             Logger.application = 'TEST';
         }
-        
+        this.network = Environment.getCardanoNetwork();
+
         Logger.isInitialized = true;
     }
 
@@ -84,11 +93,7 @@ export class Logger {
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
 
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
-        console.log(
-            `{"application": "${Logger.application}", "category": "${
-                category ?? LogCategory.INFO
-            }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`
-        );
+        console.log(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${ category ?? LogCategory.INFO }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
     }
 }

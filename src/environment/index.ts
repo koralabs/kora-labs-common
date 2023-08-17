@@ -1,3 +1,5 @@
+import { CardanoNetwork } from "../logger";
+
 export enum ComputeEnvironment {
     AWS_LAMBDA = 'aws_lambda',
     AWS_FARGATE = 'aws_fargate',
@@ -21,6 +23,21 @@ export class Environment {
             return ComputeEnvironment.AWS_OTHER;
         }
         return ComputeEnvironment.OTHER;
+    }
+
+    public static getCardanoNetwork(): CardanoNetwork {
+        try {
+            if (process.env.NETWORK) {
+                return CardanoNetwork[process.env.NETWORK as keyof typeof CardanoNetwork]
+            }
+            else {
+                return CardanoNetwork.UNSET
+            }
+        }
+        catch {
+            return CardanoNetwork.UNSET
+        }
+
     }
 
     public static async getIpAddress(): Promise<{private:string|null, public:string|null}|null> {
