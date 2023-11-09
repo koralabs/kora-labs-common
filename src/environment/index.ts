@@ -28,7 +28,7 @@ export class Environment {
     public static getCardanoNetwork(): CardanoNetwork {
         try {
             if (process.env.NETWORK) {
-                return CardanoNetwork[process.env.NETWORK as keyof typeof CardanoNetwork]
+                return CardanoNetwork[process.env.NETWORK.toUpperCase() as keyof typeof CardanoNetwork]
             }
             else {
                 return CardanoNetwork.UNSET
