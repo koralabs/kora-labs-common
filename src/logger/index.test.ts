@@ -22,6 +22,7 @@ describe('Logger Tests', () => {
             dimensions: ['taco'],
             event: 'test.log',
             message: 'burritos',
+            network: "UNSET",
             milliseconds: now,
             timestamp: expect.stringMatching(/[0-9\-]+T[0-9\:\.]+Z/)
         });
