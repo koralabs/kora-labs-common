@@ -10,7 +10,7 @@ export const checkHandlePattern = (handle: string, root?: string) => {
         };
     }
     
-    if (!!handle.match(REGEX_SUB_HANDLE) && root ? handle.endsWith(`@${root}`) : true) {
+    if (!handle.match(REGEX_SUB_HANDLE) && root ? handle.endsWith(`@${root}`) : true) {
         return {
             valid: false,
             message: RESPONSE_INVALID_HANDLE_FORMAT
