@@ -63,9 +63,9 @@ export interface ICreatorDefaults extends ISharedPzDesigner {
     bg_border_colors?: HexStringOrEmpty[]; // ["0x0a1fd3", "22d1af", "31bc23"],
     pfp_border_colors?: HexStringOrEmpty[]; // ["0x0a1fd3", "22d1af", "31bc23"],
     font_shadow_colors?: HexStringOrEmpty[]; // ["0x0a1fd3", "22d1af", "31bc23"],
-    require_pfp_collections?: HexStringOrEmpty[]; // ["0x<policy_id><asset_prefix>", "0x<other_policy_id>"],
-    require_pfp_attributes?: string[]; // ["Outerwear:Denim Jacket"],
-    require_pfp_displayed?: BoolInt; // true;
+    require_collections?: HexStringOrEmpty[]; // ["0x<policy_id><asset_prefix>", "0x<other_policy_id>"],
+    require_attributes?: string[]; // ["Outerwear:Denim Jacket"],
+    require_displayed?: BoolInt; // true;
     price?: number; // 125;
     force_creator_settings?: BoolInt; // true;
     custom_dollar_symbol?: BoolInt; // true;
