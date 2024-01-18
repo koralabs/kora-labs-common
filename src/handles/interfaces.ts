@@ -266,19 +266,17 @@ export enum OAuthSocial {
     'paypal'
 }
 
-export interface OAuthTokenMessage {
-    error?: string;
-    username?: string;
-    token?: string;
-    identifier?: string;
-    social: OAuthSocial;
-}
-
 export interface OAuthToken {
     identifier: string;
     username: string;
     token: string;
+    refresh_token: string;
+    expiredAt: string;
     social: OAuthSocial;
+}
+
+export interface OAuthTokenMessage extends Partial<OAuthToken> {
+    error?: string;
 }
 
 export interface ProtectedWord {
