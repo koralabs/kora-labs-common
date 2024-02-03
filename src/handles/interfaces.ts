@@ -105,7 +105,6 @@ export interface IPersonalization {
     trial: boolean;
     nsfw: boolean;
 }
-
 export interface IHandle {
     hex: string;
     name: string;
@@ -127,8 +126,7 @@ export interface IHandle {
     default_in_wallet: string; // my_default_hndl
     resolved_addresses: {
         ada: string;
-        eth?: string;
-        btc?: string;
+        [key: string]: string;
     };
     created_slot_number: number;
     updated_slot_number: number;
@@ -210,6 +208,7 @@ export interface IPzDatum {
     migrate_sig_required: BoolInt;
     resolved_addresses?: {
         ada: HexStringOrEmpty;
+        [key: string]: string;
     };
 }
 
