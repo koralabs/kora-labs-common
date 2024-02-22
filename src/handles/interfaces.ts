@@ -125,7 +125,6 @@ export interface IHandle {
     numeric_modifiers: string; // 'negative,decimal',
     default_in_wallet: string; // my_default_hndl
     resolved_addresses: {
-        ada: string;
         [key: string]: string;
     };
     created_slot_number: number;
@@ -147,6 +146,16 @@ export interface ICip68Handle extends IHandle {
 
 export interface IPersonalizedHandle extends ICip68Handle {
     personalization?: IPersonalization;
+}
+
+export interface ApiHandle extends IPersonalizedHandle {
+    amount: number;
+    type: HandleType;
+    default?: boolean;
+    resolved_addresses: {
+        ada: string;
+        [key: string]: string;
+    };
 }
 
 export interface IHandleStats {
@@ -207,7 +216,6 @@ export interface IPzDatum {
     agreed_terms: string; //https://adahandle.com/tou
     migrate_sig_required: BoolInt;
     resolved_addresses?: {
-        ada: HexStringOrEmpty;
         [key: string]: string;
     };
 }
