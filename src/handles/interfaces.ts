@@ -136,6 +136,7 @@ export interface IHandle {
         type: string; // 'plutus_v2', etc
         cbor: string;
     };
+    last_update_address?: string;
     svg_version: string;
     version: number;
 }
@@ -146,16 +147,6 @@ export interface ICip68Handle extends IHandle {
 
 export interface IPersonalizedHandle extends ICip68Handle {
     personalization?: IPersonalization;
-}
-
-export interface ApiHandle extends IPersonalizedHandle {
-    amount: number;
-    type: HandleType;
-    default?: boolean;
-    resolved_addresses: {
-        ada: string;
-        [key: string]: string;
-    };
 }
 
 export interface IHandleStats {
