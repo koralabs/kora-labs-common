@@ -194,10 +194,10 @@ export interface IPzDatum {
     pfp_image?: string; // ipfs://cid
     pfp_asset?: HexStringOrEmpty; // 0x<policy><assetName>
     bg_asset?: HexStringOrEmpty; // 0x<policy><assetName>
-    portal: string;
-    designer: string; // ipfs://cid containing IPersonalizationDesigner
-    socials: string;
-    vendor: string;
+    portal?: string;
+    designer?: string; // ipfs://cid containing IPersonalizationDesigner
+    socials?: string;
+    vendor?: string;
     default: BoolInt;
     last_update_address: HexStringOrEmpty; // ByteArray, not Bech32
     validated_by: HexStringOrEmpty; // PubKeyHash
