@@ -48,7 +48,8 @@ interface ISharedPzDesigner {
     font_shadow_size?: number[]; // [12, 12, 8],
     text_ribbon_colors?: HexStringOrEmpty[]; // ["0x0a1fd3", "22d1af", "31bc23"],
     text_ribbon_gradient?: string; // 'linear-45' | 'radial'
-    circuit_colors?: HexStringOrEmpty[]; //  ["0a1fd3ff", "22d1af88", "31bc2399"]
+    socials_color?: HexStringOrEmpty; // "0a1fd3"
+    circuit_color?: HexStringOrEmpty; // "0a1fd3ff"
 }
 
 export interface IPersonalizationDesigner extends ISharedPzDesigner {
@@ -70,6 +71,7 @@ export interface ICreatorDefaults extends ISharedPzDesigner {
     price?: number; // 125;
     force_creator_settings?: BoolInt; // true;
     custom_dollar_symbol?: BoolInt; // true;
+    circuit_colors?: HexStringOrEmpty[]; //  ["0a1fd3ff", "22d1af88", "31bc2399"]
 }
 
 export interface IPersonalizationPortal {
