@@ -48,8 +48,8 @@ interface ISharedPzDesigner {
     font_shadow_size?: number[]; // [12, 12, 8],
     text_ribbon_colors?: HexStringOrEmpty[]; // ["0x0a1fd3", "22d1af", "31bc23"],
     text_ribbon_gradient?: string; // 'linear-45' | 'radial'
-    socials_color: HexStringOrEmpty; // "0a1fd3"
-    circuit_color: HexStringOrEmpty; // "0a1fd3ff"
+    socials_color?: HexStringOrEmpty; // "0a1fd3"
+    circuit_color?: HexStringOrEmpty; // "0a1fd3ff"
 }
 
 export interface IPersonalizationDesigner extends ISharedPzDesigner {
