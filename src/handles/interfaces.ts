@@ -18,6 +18,7 @@ export type HexStringOrEmpty = HexString | '';
  */
 export enum AssetNameLabel {
     LABEL_000 = '00000000', // 0
+    LABEL_001 = '00001070', // 001 // SubHandle Settings
     LABEL_100 = '000643b0', // 100
     LABEL_222 = '000de140', // 222
     LABEL_333 = '0014df10', // 333
@@ -212,6 +213,23 @@ export interface IPzDatum {
     resolved_addresses?: {
         [key: string]: string;
     };
+}
+
+export interface ISubHandleSettings {
+    enabled?: BoolInt;
+    tierPricing?: [number, number][];
+    enablePz?: BoolInt;
+    creatorDefaults?: ICreatorDefaults;
+    creatorDefaultsBgImage?: string;
+}
+
+export interface IVirtualSubHandleSettings extends ISubHandleSettings {
+    expires_in_days?: number;
+}
+
+export interface ISubHandleSettingsDatum {
+    nft?: ISubHandleSettings;
+    virtual?: IVirtualSubHandleSettings;
 }
 
 export interface IHandleFileContent {
