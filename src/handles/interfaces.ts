@@ -215,12 +215,15 @@ export interface IPzDatum {
     };
 }
 
+export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
+    bg_image: string;
+}
+
 export interface ISubHandleSettings {
     enabled?: BoolInt;
     tierPricing?: [number, number][];
     enablePz?: BoolInt;
-    creatorDefaults?: ICreatorDefaults;
-    creatorDefaultsBgImage?: string;
+    creatorDefaults?: ISubHandleSettingsCreatorDefaults;
 }
 
 export interface IVirtualSubHandleSettings extends ISubHandleSettings {
