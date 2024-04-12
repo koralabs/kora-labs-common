@@ -1,0 +1,15 @@
+name: kora-labs-common
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+jobs:
+    deploy:
+        uses: koralabs/adahandle-deployments/.github/workflows/main.yml@master
+        with:
+            network: mainnet
+            secrets_app_code: NONE
+            deployment_type: npm-publish
+            node_version: 20
+        secrets: inherit
