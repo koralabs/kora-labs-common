@@ -12,4 +12,5 @@ jobs:
             secrets_app_code: NONE
             deployment_type: npm-publish
             node_version: 20
+            is_public: true
         secrets: inherit
