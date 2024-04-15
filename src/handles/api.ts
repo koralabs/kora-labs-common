@@ -1,5 +1,6 @@
 import { HANDLES_API_KEY, KORA_USER_AGENT } from "./constants";
 
+// WHEN WE REVAMP THE SDK, THIS CAN ALL MOVE THERE
 export class HandlesApi {
     private static _network?: string;
     private static _host?: string;

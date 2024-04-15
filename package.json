@@ -1,6 +1,6 @@
 {
   "name": "@koralabs/kora-labs-common",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "description": "Kora Labs Common Utilities",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,6 +12,9 @@
   "contributors": [
     {
       "name": "BigIrishLion"
+    },
+    {
+      "name": "papag00se"
     }
   ],
   "scripts": {
