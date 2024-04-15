@@ -16,8 +16,8 @@ export function dec2hex(dec: number) {
 
 export async function getRandomCodeVerifier(length: number) {
     const crypto = await getNativeCrypto();
-    var array = new Uint32Array(length / 2);
-    // @ts-ignore
+    const array = new Uint32Array(length / 2);
+    // @ts-expect-error -> getRandomValues is indeed callable
     crypto.getRandomValues(array);
     return Array.from(array, dec2hex).join('');
 }
@@ -30,10 +30,10 @@ export const sha256 = async (plain: string): Promise<ArrayBuffer> => {
 }
 
 export function base64urlencode(a: ArrayBuffer) {
-    var str = "";
-    var bytes = new Uint8Array(a);
-    var len = bytes.byteLength;
-    for (var i = 0; i < len; i++) {
+    let str = "";
+    const bytes = new Uint8Array(a);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
         str += String.fromCharCode(bytes[i]);
     }
     return btoa(str)

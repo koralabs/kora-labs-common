@@ -74,11 +74,11 @@ class JsonToDatumObject {
                 const fieldsMap = new Map();
                 let tag = null;
                 const keys = this.json instanceof Map ? this.json.keys() : Object.keys(this.json);
-                for (let key of keys) {
+                for (const key of keys) {
                     if (key instanceof DupeKey) {
                         fieldsMap.set(key, this.json.get(key));
                     } else {
-                        let split_key = parseInt(key.split('_').at(1) ?? '');
+                        const split_key = parseInt(key.split('_').at(1) ?? '');
                         if (
                             key.startsWith('constructor_') &&
                             !isNaN(split_key) &&
@@ -200,7 +200,7 @@ const decodeObject = ({
         const keys = [...val.keys()];
         for (let i = 0; i < keys.length; i++) {
             const key = keys[i];
-            let value = val.get(key);
+            const value = val.get(key);
 
             const { mapKey, schemaValue } = parseSchema(key, schema, defaultKeyType, i);
 
@@ -261,7 +261,7 @@ const decodeObject = ({
         const keys = Object.keys(val);
         for (let i = 0; i < keys.length; i++) {
             const key = keys[i];
-            let value = val[key];
+            const value = val[key];
 
             const { mapKey, schemaValue } = parseSchema(key, schema, defaultKeyType, i);
 

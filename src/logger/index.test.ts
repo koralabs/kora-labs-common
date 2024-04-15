@@ -24,7 +24,7 @@ describe('Logger Tests', () => {
             message: 'burritos',
             network: "UNSET",
             milliseconds: now,
-            timestamp: expect.stringMatching(/[0-9\-]+T[0-9\:\.]+Z/)
+            timestamp: expect.stringMatching(/[0-9-]+T[0-9:.]+Z/)
         });
     });
 });

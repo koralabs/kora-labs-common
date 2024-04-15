@@ -23,6 +23,7 @@ export class HandlesApi {
     }
 
     static async apiRequest(url: string, headers?: Record<string, string>, body?: any) {
+        body;
         if (!HandlesApi._host) {
             throw new Error('HandlesApi has not been initialized. Please call HandlesApi.init(<network>)');
         }
