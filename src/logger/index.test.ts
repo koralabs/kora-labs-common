@@ -1,9 +1,11 @@
-import { LogCategory, Logger } from '.';
+import { CardanoNetwork, LogCategory, Logger } from '.';
 
 describe('Logger Tests', () => {
     it('should log', () => {
         const now = Date.now();
         const logSpy = jest.spyOn(console, 'log');
+        Logger.application = 'TEST';
+        Logger.network = CardanoNetwork.UNSET;
         Logger.log({
             message: 'burritos',
             category: LogCategory.ERROR,
