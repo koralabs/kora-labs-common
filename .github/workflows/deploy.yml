@@ -11,7 +11,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v1
 
-    - name: Publish ${{ github.action }}
+    - name: Publish ${{ github.workflow }}
       id: publish
       env:
         DEPLOYMENT_ACCESS_TOKEN: ${{ secrets.DEPLOYMENT_ACCESS_TOKEN }}
