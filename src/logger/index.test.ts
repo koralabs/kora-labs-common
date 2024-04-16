@@ -1,4 +1,5 @@
-import { CardanoNetwork, LogCategory, Logger } from '.';
+import { LogCategory, Logger } from '.'
+import { CardanoNetwork } from '../constants';
 
 describe('Logger Tests', () => {
     it('should log', () => {

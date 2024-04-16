@@ -1,3 +1,4 @@
+import { CardanoNetwork } from '../constants';
 import { Environment } from '../environment';
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
 if (!('toJSON' in Error.prototype))
@@ -23,13 +24,6 @@ export enum LogCategory {
     ERROR = 'ERROR',
     FATAL = 'FATAL',
     NOTIFY = 'NOTIFY'
-}
-
-export enum CardanoNetwork {
-    MAINNET = 'MAINNET',
-    PREPROD = 'PREPROD',
-    PREVIEW = 'PREVIEW',
-    UNSET = 'UNSET'
 }
 
 export class Logger {

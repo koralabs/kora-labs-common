@@ -1,4 +1,4 @@
-import { CardanoNetwork } from "../logger";
+import { CardanoNetwork } from "../constants";
 
 export enum ComputeEnvironment {
     AWS_LAMBDA = 'aws_lambda',
