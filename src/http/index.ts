@@ -10,7 +10,22 @@ export class Request {
         this.body = req.body;
     }
     getCookie = (key: string): string | undefined => {
-        return this.headers["Cookie"]?.split(/;\s?/gi).find(cookie => cookie.toLowerCase().startsWith(key.toLowerCase()))?.split('=')?.[1];
+        let cookies = this.headers["Cookie"];
+        if (!cookies) {
+            cookies = this.headers["cookie"];
+        }
+        let cookie = this._searchCookie(cookies, key);
+        if (!cookie) {
+            // koracookiejar is how we get around Lambda's MultiValueHeader lameness 
+            const koracookiejar = this._searchCookie(cookies, 'koracookiejar');
+            console.log(koracookiejar);
+            cookie = this._searchCookie(koracookiejar ? decodeURIComponent(koracookiejar).replace(/\|/g, '; ') : undefined, key);
+        }
+        return cookie;
+    }
+    _searchCookie = (cookies: string | undefined, key: string): string | undefined => {
+        console.log('COOKIES', cookies)
+        return cookies?.split(/;\s?/gi).find(cookie => cookie.toLowerCase().startsWith(key.toLowerCase()))?.split('=')?.[1];
     }
 }
 
