@@ -1,4 +1,4 @@
-import { CardanoNetwork } from "../logger";
+import { CardanoNetwork } from "../constants";
 
 export enum ComputeEnvironment {
     AWS_LAMBDA = 'aws_lambda',
@@ -49,12 +49,14 @@ export class Environment {
                 prv = await response.text();
             }
             catch{
+                // swallow
             }
             try {
                 const response = await fetch('http://169.254.169.254/latest/meta-data/public-ipv4');
                 pub = await response.text();
             }
             catch{
+                // swallow
             }
             if (prv || pub){
                 return {private: prv ?? null, public: pub ?? null}
@@ -74,12 +76,14 @@ export class Environment {
             return response.text();
         }
         catch(err){
+            // swallow
         }
         try {
             const response = await fetch('http://169.254.169.254/latest/meta-data/instance-id');
             return response.text();
         }
         catch(err){
+            // swallow
         }
         return null;
 

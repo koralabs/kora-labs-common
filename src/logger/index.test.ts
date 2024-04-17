@@ -1,9 +1,12 @@
-import { LogCategory, Logger } from '.';
+import { LogCategory, Logger } from '.'
+import { CardanoNetwork } from '../constants';
 
 describe('Logger Tests', () => {
     it('should log', () => {
         const now = Date.now();
         const logSpy = jest.spyOn(console, 'log');
+        Logger.application = 'TEST';
+        Logger.network = CardanoNetwork.UNSET;
         Logger.log({
             message: 'burritos',
             category: LogCategory.ERROR,
@@ -22,9 +25,9 @@ describe('Logger Tests', () => {
             dimensions: ['taco'],
             event: 'test.log',
             message: 'burritos',
-            network: "UNSET",
+            network: process.env.NETWORK?.toUpperCase() ?? "UNSET",
             milliseconds: now,
-            timestamp: expect.stringMatching(/[0-9\-]+T[0-9\:\.]+Z/)
+            timestamp: expect.stringMatching(/[0-9-]+T[0-9:.]+Z/)
         });
     });
 });

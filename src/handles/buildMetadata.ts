@@ -1,4 +1,4 @@
-import { HandleType, IHandleMetadata, Rarity } from './interfaces';
+import { HandleType, IHandleMetadata } from './interfaces';
 import { getRarity } from './utils';
 
 const buildCharacters = (name: string): string => {

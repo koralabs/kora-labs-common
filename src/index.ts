@@ -7,3 +7,6 @@ export * from './utils';
 export { ProtectedWords } from './protectedWords';
 export { buildMetadata } from './handles/buildMetadata';
 export * from './handles/utils';
+export * from './handles/api';
+export * from './http';
+export * from './constants'
