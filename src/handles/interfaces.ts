@@ -320,7 +320,6 @@ export enum AvailabilityResponseCode {
 
 export interface AvailabilityResponse {
     available: boolean;
-    cost?: number | 'n/a';
     handle: string;
     message?: string;
     type?: 'notallowed' | 'invalid' | 'pending' | 'private';
