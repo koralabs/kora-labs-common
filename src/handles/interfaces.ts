@@ -335,3 +335,77 @@ export interface ReservedOrProtected {
     reserved?: string[];
     protected: ProtectedWord[];
 }
+
+/**
+ * Example: If you have 10 handles in your wallet, the new price is X
+ *
+ * {
+ *  "0x{policyId}${assetName(optional)}": {
+ *      10: 10,
+ *      20: 20,
+ *      30: 30
+ *   }
+ * }
+ *
+ */
+export interface MintHandleDiscount {
+    [policyAndAssetName: string]: {
+        [ownedAmount: number]: number; // price;
+    };
+}
+
+/**
+ * Example: If you have 10 handles in your wallet, the new price is X
+ *
+ * [
+ *   ['0x000000000000000000000000000000000000000000000000000000027465737433', [[1, 35000000],[1, 35000000]]],
+ *   ['0x000000000000000000000000000000000000000000000000000000027465737431', [[2, 30000000]]],
+ *   ['0x0000000000000000000000000000000000000000000000000000000274657374', [[4, 0]]]
+ * ]
+ *
+ */
+export type MintHandleDiscountArray = [string, [number, number]][];
+
+export interface CollectionInfo {
+    paymentAddress: string;
+    referenceTokenAddress?: string;
+    collectionName: string;
+    collectionImage: string;
+    royaltyAddress: string;
+    royaltyPercentage: number;
+    relatedPolicyIds: string[];
+    nsfw: boolean;
+}
+
+export type MintConfig = [
+    string, // fee address hex
+    [
+        number, // fee schedule price
+        number // fee schedule amount. if the price is greater than or equal, change this amount
+    ][]
+];
+
+export type MintHandleSettingsAsset = [
+    string, // hex name,
+    [string, number], // utxo, index
+    number, // price
+    number, // valid until timestamp
+    MintHandleDiscount | MintHandleDiscountArray
+];
+
+export interface MintHandleSettingsDetails {
+    collectionName: string;
+    collectionImage: string;
+    lastEditingContractHash: string;
+    mintingPolicyId: string;
+    relatedPolicyIds?: string[];
+    contractVersion?: number;
+    nsfw: boolean;
+}
+
+export type MintHandleSettings = [
+    string, // payment address hex,
+    string, // editing contract address hex
+    MintHandleSettingsAsset[], // assets
+    MintHandleSettingsDetails
+];
