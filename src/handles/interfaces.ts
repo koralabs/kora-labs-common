@@ -233,6 +233,7 @@ export interface IVirtualSubHandleSettings extends ISubHandleSettings {
 export interface ISubHandleSettingsDatum {
     nft?: ISubHandleSettings;
     virtual?: IVirtualSubHandleSettings;
+    buy_down_paid?: number;
 }
 
 export interface IHandleFileContent {
