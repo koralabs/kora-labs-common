@@ -1,6 +1,12 @@
 import * as cbor from 'cbor';
 import { boolean, isBooleanable } from 'boolean';
 
+export { designerSchema } from './schema/designer';
+export { subHandleSettingsDatumSchema } from './schema/subHandleSettings';
+export { handleDatumSchema } from './schema/handleData';
+export { portalSchema } from './schema/portal';
+export { socialsSchema } from './schema/socials';
+
 // The five ways to represent metadata/datum:
 // Json (cardano-cli can take this with --tx-out-datum-json-value)
 // TxMetadataJson ("Detailed Schema")
