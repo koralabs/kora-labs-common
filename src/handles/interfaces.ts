@@ -143,6 +143,7 @@ export interface IHandle {
     last_update_address?: string;
     svg_version: string;
     version: number;
+    policy?: string;
 }
 
 export interface ICip68Handle extends IHandle {

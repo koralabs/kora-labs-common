@@ -14,25 +14,61 @@ import { boolean, isBooleanable } from 'boolean';
 // vs
 // const obj = JSON.parse(<json>)
 
-export enum KeyType {
+export enum DefaultTextFormat {
     UTF8 = 'utf8',
     HEX = 'hex'
 }
 
+export interface EncodeOptions {
+    /** JavaScript doesn't support numeric object keys. CBOR does. 
+     * This property converts keys that are numeric strings into numeric CBOR keys. Defaults to `false`.
+     * @example
+     * {"1": "abc", "2":"def"}
+     * // will convert to the CBOR equivalent of
+     * {1: "abc", 2: "def"}
+    */
+    numericKeys?: boolean, 
+    /** Strings or Buffers larger than `chunkSize` are broken into an array of strings or Buffers. Defaults to `64`
+     * @example
+     * "01234567890123456789"
+     * // chunkSize:10 will convert to the CBOR equivalent of
+     * ['0123456789', '0123456789']
+    */
+    chunkSize?: number, 
+    /** Whether to use CBOR "definite" or "indefinite" arrays. Defaults to `true`
+     * @example
+     * {indefiniteArrays: true} // will wrap arrays in the `9f[...]ff` CBOR Indefinite Major Type
+     * {indefiniteArrays: false} // will preceed the array with the CBOR Major Type `8n[...]` (where `n` is the length of the array)
+    */
+    indefiniteArrays?: boolean,
+    /**Whether strings should all be converted to CBOR byte strings or text strings. Defaults to `false`
+     * @example
+     * {defaultToText: false} // will preceed the bytes with the CBOR Major Type `4n[...]` (bytes)
+     * {defaultToText: true} // will preceed the bytes with the CBOR Major Type `6n[...]` (text)
+     * // where `n` is the length of the bytes
+     */
+    defaultToText?: boolean
+}
+
 class JsonToDatumObject {
     json: any;
-    numericKeys: boolean;
-    constructor(json: any, numericKeys = false) {
+    options: EncodeOptions
+    constructor(json: any, options?: EncodeOptions) {
         this.json = json;
-        this.numericKeys = numericKeys;
+        this.options = {
+            numericKeys: options?.numericKeys,
+            chunkSize: options?.chunkSize ?? 64,
+            indefiniteArrays: options?.indefiniteArrays ?? true,
+            defaultToText: options?.defaultToText
+        };
         if (Array.isArray(this.json)) {
             for (let i = 0; i < this.json.length; i++) {
-                this.json[i] = new JsonToDatumObject(this.json[i], numericKeys);
+                this.json[i] = new JsonToDatumObject(this.json[i], this.options );
             }
         } else if (typeof this.json === 'object') {
             if (this.json !== null) {
                 Object.keys(this.json).map((key) => {
-                    this.json[key] = new JsonToDatumObject(this.json[key], numericKeys);
+                    this.json[key] = new JsonToDatumObject(this.json[key], this.options);
                 });
             }
         }
@@ -51,24 +87,24 @@ class JsonToDatumObject {
             key = key.slice(1);
         }
 
-        return Buffer.from(key);
+        return this.options.defaultToText ? key : Buffer.from(key);
     };
 
-    getHexOrString = (key: string) => {
-        if (key.startsWith('0x')) {
-            return Buffer.from(key.substring(2), 'hex');
+    getHexOrString = (str: string) => {
+        if (str.startsWith('0x')) {
+            return Buffer.from(str.substring(2), 'hex');
         }
 
-        if (key.startsWith('~0x')) {
-            key = key.slice(1);
+        if (str.startsWith('~0x')) {
+            str = str.slice(1);
         }
 
-        return Buffer.from(key);
+        return this.options.defaultToText ? str : Buffer.from(str);
     };
 
     encodeCBOR = (encoder: any) => {
         if (Array.isArray(this.json)) {
-            return cbor.Encoder.encodeIndefinite(encoder, this.json);
+            return this.options.indefiniteArrays ? cbor.Encoder.encodeIndefinite(encoder, this.json) : encoder.pushAny(this.json);
         } else if (typeof this.json === 'object') {
             if (this.json !== null) {
                 const fieldsMap = new Map();
@@ -101,11 +137,11 @@ class JsonToDatumObject {
             return encoder.pushAny(this.json);
         } else if (typeof this.json === 'string') {
             // check for hex and if so, decode it
-            const bufferedString = this.getHexOrString(this.json);
-
-            return bufferedString.length > 64
-                ? cbor.Encoder.encodeIndefinite(encoder, bufferedString, { chunkSize: 64 })
-                : encoder.pushAny(bufferedString);
+            const str = this.getHexOrString(this.json);
+            // @ts-expect-error TS is incorrect. The constructor always sets this.
+            return str.length > this.options.chunkSize
+                ? cbor.Encoder.encodeIndefinite(encoder, str, { chunkSize: this.options.chunkSize })
+                : encoder.pushAny(str);
         } else if (typeof this.json === 'boolean') {
             return encoder.pushAny(this.json ? 1 : 0);
         } else {
@@ -119,7 +155,7 @@ class JsonToDatumObject {
     };
 
     keyIsNumeric = (key: any) => {
-        return this.numericKeys && key !== null && key.length > 0 && !isNaN(key);
+        return this.options.numericKeys && key !== null && key.length > 0 && !isNaN(key);
     };
 }
 
@@ -131,13 +167,13 @@ export class DupeKey extends JsonToDatumObject {
     }
 }
 
-export const encodeJsonToDatum = async (json: any, numericKeys = false) => {
-    const obj = new JsonToDatumObject(json, numericKeys);
-    const result = await cbor.encodeAsync(obj, { chunkSize: 64 });
+export const encodeJsonToDatum = async (json: any, options?: EncodeOptions) => {
+    const obj = new JsonToDatumObject(json, options);
+    const result = await cbor.encodeAsync(obj, { chunkSize: options?.chunkSize ?? 64 });
     return result.toString('hex');
 };
 
-const parseSchema = (key: any, schema: any, defaultKeyType: KeyType, i: number) => {
+const parseSchema = (key: any, schema: any, defaultKeyType: DefaultTextFormat, i: number) => {
     let schemaValue;
 
     if (Number.isInteger(key)) {
@@ -152,7 +188,7 @@ const parseSchema = (key: any, schema: any, defaultKeyType: KeyType, i: number) 
     let schemaKey = Object.keys(schema).find((k) => k === mapKey);
     if (!schemaKey) {
         schemaKey = Object.keys(schema).find((k) => k.replace('0x', '') === mapKey);
-        if (schemaKey || defaultKeyType == KeyType.HEX) {
+        if (schemaKey || defaultKeyType == DefaultTextFormat.HEX) {
             mapKey = hexKey;
         }
     }
@@ -165,7 +201,7 @@ const parseSchema = (key: any, schema: any, defaultKeyType: KeyType, i: number) 
     // dynamic match
     if (!schemaKey) {
         schemaKey = Object.keys(schema).find((k) => k.startsWith('<') && k.endsWith('>'));
-        if (schemaKey === '<hexstring>' || defaultKeyType == KeyType.HEX) {
+        if (schemaKey === '<hexstring>' || defaultKeyType == DefaultTextFormat.HEX) {
             mapKey = hexKey;
         }
     }
@@ -184,13 +220,13 @@ const decodeObject = ({
     val,
     constr = null,
     schema = {},
-    defaultKeyType = KeyType.UTF8,
+    defaultKeyType = DefaultTextFormat.UTF8,
     forJson = true
 }: {
     val: any;
     constr?: number | null;
     schema?: any;
-    defaultKeyType?: KeyType;
+    defaultKeyType?: DefaultTextFormat;
     forJson?: boolean;
 }): any => {
     const isMap = val instanceof Map;
@@ -337,7 +373,7 @@ export const decodeCborToJson = async ({
 }: {
     cborString: string;
     schema?: any;
-    defaultKeyType?: KeyType;
+    defaultKeyType?: DefaultTextFormat;
     forJson?: boolean;
 }) => {
     const decoded = await cbor.decodeAll(Buffer.from(cborString, 'hex'), {

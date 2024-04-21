@@ -1,4 +1,4 @@
-import { DupeKey, KeyType, decodeCborToJson, encodeJsonToDatum } from './index';
+import { DupeKey, DefaultTextFormat, decodeCborToJson, encodeJsonToDatum } from './index';
 import { handleDatumSchema } from './schema/handleData';
 import { designerSchema } from './schema/designer';
 import { portalSchema } from './schema/portal';
@@ -380,7 +380,7 @@ describe('CBOR tests', () => {
             const cbor =
                 'a2581c5ca7f4e1e708ddf1958b2b7e65134738ebba5d8c803bdbe50ea0f3c6a14000581c8ed30c080aba8eb431dabb802ea8dda3a131b0f49c72d2766b25b1eba14000';
 
-            const decoded = await decodeCborToJson({ cborString: cbor, defaultKeyType: KeyType.HEX });
+            const decoded = await decodeCborToJson({ cborString: cbor, defaultKeyType: DefaultTextFormat.HEX });
             expect(decoded).toEqual({
                 '0x5ca7f4e1e708ddf1958b2b7e65134738ebba5d8c803bdbe50ea0f3c6': { '0x': 0 },
                 '0x8ed30c080aba8eb431dabb802ea8dda3a131b0f49c72d2766b25b1eb': { '0x': 0 }
@@ -497,7 +497,7 @@ describe('CBOR tests', () => {
             '9f5839008e4ac0583cfeb7a1bb3434f10afc8439aa4d5e7eac6e6f2822ce5b9dfc56a127f684fe6d2bb4eedaef9525a69f0fa08b5796599cb6eae25d581d700401221efdbba348b80457d4f27b17db1b45ad510511a8756ff564b59f9f4a001bc2805461636f20319f582004507ca1f0757dce73d1c410fa2a47918582f1c52a0661a308b97a27f24897f400ff1a004c4b4000a0ff9f4a001bc2805461636f20329f582039dbe8fd40bfee718b34a6464731ae02f0c89e153ec2ffc5ebc0c0c5476a0c9c00ff0000a0ff9f4a001bc2805461636f20339f5820939db71ab742a955ed2cb6c359a8f36dca52749871656fc13683c77072a3bc0b00ff1a0098968000a0ff9f4a001bc2805461636f20349f5820b5ee5636290985cf378cc2819346eeee06efa8c13ab044f426b59c52e8224a9900ff1a004c4b401b0000018b91b15580a0ff9f4a001bc2805461636f20359f58201928d9ad51fdd909e187d7babdba79052cddb3aced97d2a7a28b3f7881545f2600ff1a009896801b0000018b9243d44ca1581cf0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9aa3011a004c4b40021a002625a0031a000f4240ffffa74e636f6c6c656374696f6e4e616d65455461636f734f636f6c6c656374696f6e496d6167655f5840697066733a2f2f6261667962656963793763766f717374653336626a6678736d333778756f66786768376b6a377279616c377462776d6268716f776d346b6d78426b65ff51726f79616c747950657263656e74616765004e726f79616c7479416464726573735f5840616464725f7465737431717a387934737a63386e6c743067646d787336307a7a687573737536356e323730366b78756d656779743839683830753236736a3061582c35796c656b6a686438776d746865326664786e753836707a36686a657665656468327566777371397075716eff576c61737445646974696e67436f6e747261637448617368581c0401221efdbba348b80457d4f27b17db1b45ad510511a8756ff564b54f6d696e74696e67506f6c6963794964581c931f6c1fd0374e2c08449986c946aef138e95c3e3ff8c30a37bd017b446e73667700ff';
 
         it('Should convert from JSON to TxMetadataJson with numberic keys', async () => {
-            const encoded = await encodeJsonToDatum(getJson(), true);
+            const encoded = await encodeJsonToDatum(getJson(), { numericKeys: true });
             expect(encoded).toEqual(cbor);
         });
 

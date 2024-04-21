@@ -53,6 +53,8 @@ export const isAlphaNumeric = (str: string): boolean => {
     return /^[a-zA-Z0-9]+$/.test(str);
 };
 
-export { KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
+export { DefaultTextFormat as KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
 
 export const isServer = (typeof process !== 'undefined') && (typeof process.versions.node !== 'undefined');
+
+export * from './crypto'

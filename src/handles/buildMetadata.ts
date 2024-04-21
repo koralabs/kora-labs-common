@@ -1,5 +1,5 @@
 import { HandleType, IHandleMetadata } from './interfaces';
-import { getRarity } from './utils';
+import { getRarity } from './index';
 
 const buildCharacters = (name: string): string => {
     const characters: string[] = [];

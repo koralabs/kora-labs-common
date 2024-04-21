@@ -1,4 +1,5 @@
 import { HANDLES_API_KEY, KORA_USER_AGENT } from "./constants";
+import { IHandle } from "./interfaces";
 
 // WHEN WE REVAMP THE SDK, THIS CAN ALL MOVE THERE
 export class HandlesApi {
@@ -19,7 +20,10 @@ export class HandlesApi {
         if (!handle){
             throw new Error("handle is required");
         }
-        return await this.apiRequest(`/handles/${handle}`)
+        const handleJson = await this.apiRequest(`/handles/${handle}`) as IHandle;
+        // This should be coming ffrom the API. The API needs to start setting this
+        handleJson.policy = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
+        return handleJson;
     }
 
     static async apiRequest(url: string, headers?: Record<string, string>, body?: any) {

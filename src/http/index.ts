@@ -18,13 +18,11 @@ export class Request {
         if (!cookie) {
             // koracookiejar is how we get around Lambda's MultiValueHeader lameness 
             const koracookiejar = this._searchCookie(cookies, 'koracookiejar');
-            console.log(koracookiejar);
             cookie = this._searchCookie(koracookiejar ? decodeURIComponent(koracookiejar).replace(/\|/g, '; ') : undefined, key);
         }
         return cookie;
     }
     _searchCookie = (cookies: string | undefined, key: string): string | undefined => {
-        console.log('COOKIES', cookies)
         return cookies?.split(/;\s?/gi).find(cookie => cookie.toLowerCase().startsWith(key.toLowerCase()))?.split('=')?.[1];
     }
 }
