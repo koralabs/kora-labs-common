@@ -221,20 +221,30 @@ export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
 }
 
 export interface ISubHandleSettings {
-    enabled?: BoolInt;
-    tierPricing?: [number, number][];
-    enablePz?: BoolInt;
-    creatorDefaults?: ISubHandleSettingsCreatorDefaults;
+    public_minting_enabled?: BoolInt;
+    tier_pricing?: [number, number][];
+    pz_enabled?: BoolInt;
+    creator_defaults?: ISubHandleSettingsCreatorDefaults;
+    /** 
+     * Used for virtual SubHandles. The slot which the virtual SubHandle expires
+     * 
+     * 0 = never expires
+    */
+    expires_slot?: number;
 }
 
-export interface IVirtualSubHandleSettings extends ISubHandleSettings {
-    expires_in_days?: number;
+export interface ISubHandleAdminSettings { // `sh_settings`
+    valid_contracts: HexString[]
+    admin_creds: HexString[]
+    base_price: number
+    buy_down_prices: [number, number][];
 }
 
 export interface ISubHandleSettingsDatum {
     nft?: ISubHandleSettings;
-    virtual?: IVirtualSubHandleSettings;
-    buy_down_paid?: number;
+    virtual?: ISubHandleSettings;
+    buy_down_paid?: number; // how much they have paid to buy down
+    buy_down_price?: number; // The current price they have paid for (we give the better price between the two)
 }
 
 export interface IHandleFileContent {
