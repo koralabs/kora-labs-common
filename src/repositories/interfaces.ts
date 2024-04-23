@@ -2,7 +2,8 @@ export interface IOAuthRepo {
     getClient(clientId?: string | null): Promise<AuthClient>;
     getGrant(handle?:string | null, clientId?: string | null): Promise<AuthGrant>;
     setGrant(grant?: AuthGrant): Promise<void>;
-    getPermissions(): Promise<FriendlyPermissions>
+    getPermissions(): Promise<FriendlyPermissions>;
+    validateAccessToken(clientId: string, handle: string, accessToken: string): Promise<boolean>;
 }
 
 export interface AuthClient {
