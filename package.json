@@ -1,6 +1,6 @@
 {
   "name": "@koralabs/kora-labs-common",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Kora Labs Common Utilities",
   "main": "index.js",
   "types": "index.d.ts",
@@ -42,8 +42,5 @@
     "boolean": "^3.2.0",
     "cbor": "^9.0.2",
     "pluralize": "^8.0.0"
-  },
-  "files": [
-    "*"
-  ]
+  }
 }

@@ -1,10 +1,10 @@
-import { isServer } from "..";
+import { IS_SERVER } from '../../constants';
 
 // var verifier = await getRandomCodeVerifier(64);
 // var challenge = await getChallengeFromVerifier(verifier);
 
 export const getNativeCrypto = async () => {
-    if (isServer) {
+    if (IS_SERVER) {
         return await import('crypto');
     }
     return window.crypto;
