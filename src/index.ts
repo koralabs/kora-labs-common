@@ -5,4 +5,5 @@ export * from './utils';
 export * from './handles';
 export * from './http';
 export * from './constants';
+export * from './types';
 export * from './repositories';

@@ -1,4 +1,4 @@
-import { CardanoNetwork } from '../constants';
+import { CardanoNetwork } from '../types';
 import { Environment } from '../environment';
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
 if (!('toJSON' in Error.prototype))

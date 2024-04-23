@@ -1,33 +1,11 @@
+import { BoolInt, HexString, HexStringOrEmpty } from "../types";
+
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
     common = 'common', // - 4-7 characters
     rare = 'rare', // - 3 characters
     ultra_rare = 'ultra_rare', // - 2 characters
     legendary = 'legendary' // - 1 character
-}
-
-export type BoolInt = 0 | 1;
-export type HexString = `0x${string}`;
-export type HexStringOrEmpty = HexString | '';
-
-/**
- * The asset label is a string that is used to identify the asset type.
- * First, remove the first and last 0.
- * Next, use the first 4 characters as the hex and convert to decimal. https://www.rapidtables.com/convert/number/hex-to-decimal.html
- * Finally, use the decimal number and convert to CRC8. It should match the last 2 characters. https://crccalc.com/
- */
-export enum AssetNameLabel {
-    LABEL_000 = '00000000', // 0
-    LABEL_001 = '00001070', // 001 // SubHandle Settings
-    LABEL_100 = '000643b0', // 100
-    LABEL_222 = '000de140', // 222
-    LABEL_333 = '0014df10', // 333
-    LABEL_444 = '001bc280' // 444
-}
-
-export interface KeyPair {
-    key: string;
-    value: any;
 }
 
 export interface SocialItem {
