@@ -3,7 +3,7 @@ import { IS_SERVER } from '../../constants';
 // var verifier = await getRandomCodeVerifier(64);
 // var challenge = await getChallengeFromVerifier(verifier);
 
-export const getNativeCrypto = async () => {
+export const getNativeCrypto = async (): Promise<any> => {
     if (IS_SERVER) {
         return await import('crypto');
     }
@@ -17,7 +17,6 @@ export function dec2hex(dec: number) {
 export async function getRandomCodeVerifier(length: number) {
     const crypto = await getNativeCrypto();
     const array = new Uint32Array(length / 2);
-    // @ts-expect-error -> getRandomValues is indeed callable
     crypto.getRandomValues(array);
     return Array.from(array, dec2hex).join('');
 }
