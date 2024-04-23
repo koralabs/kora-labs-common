@@ -6,4 +6,5 @@ export * from './handles';
 export * from './http';
 export * from './constants';
 export * from './types';
+export * from './errors';
 export * from './repositories';
