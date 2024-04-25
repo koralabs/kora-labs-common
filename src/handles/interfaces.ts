@@ -258,7 +258,7 @@ export interface ApprovedPolicies {
     };
 }
 
-export enum OAuthType {
+export enum OAuthSocial {
     'twitter',
     'facebook',
     'discord',
@@ -277,17 +277,19 @@ export enum OAuthType {
     'pin',
     'spotify',
     'soundcloud',
-    'paypal',
-    'auth_handle_me'
+    'paypal'
 }
 
 export interface OAuthToken {
-    identifier: string;
-    username: string;
     token: string;
     refresh_token: string;
     expiredAt: string;
-    type: OAuthType;
+}
+
+export interface OAuthSocialToken extends OAuthToken {
+    identifier: string;
+    username: string;
+    social: OAuthSocial;
 }
 
 export interface OAuthTokenMessage extends Partial<OAuthToken> {
