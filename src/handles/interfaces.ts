@@ -403,3 +403,51 @@ export type MintHandleSettings = [
     MintHandleSettingsAsset[], // assets
     MintHandleSettingsDetails
 ];
+
+export interface IVirtualSubHandle {
+    name: string;
+    hex: string;
+    holder: string;
+    holder_type: string;
+    length: number;
+    utxo: string;
+    rarity: string;
+    characters: string;
+    numeric_modifiers: string;
+    resolved_addresses: VirtualSubHandleResolvedAddresses;
+    og_number: number;
+    standard_image: string;
+    standard_image_hash: string;
+    image: string;
+    image_hash: string;
+    default_in_wallet: string;
+    created_slot_number: number;
+    updated_slot_number: number;
+    has_datum: boolean;
+    amount: number;
+    svg_version: string;
+    version: number;
+    type: string;
+    personalization: VirtualSubHandlePersonalization;
+    reference_token: VirtualSubHandleReferenceToken;
+    default: boolean;
+    last_update_address: string;
+}
+
+export interface VirtualSubHandleResolvedAddresses {
+    ada: string;
+}
+
+export interface VirtualSubHandlePersonalization {
+    validated_by: string;
+    trial: boolean;
+    nsfw: boolean;
+}
+
+export interface VirtualSubHandleReferenceToken {
+    tx_id: string;
+    index: number;
+    lovelace: number;
+    datum: string;
+    address: string;
+}
