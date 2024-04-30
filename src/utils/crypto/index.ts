@@ -1,3 +1,4 @@
+import { bech32 } from 'bech32';
 import { IS_SERVER } from '../../constants';
 
 // var verifier = await getRandomCodeVerifier(64);
@@ -46,3 +47,13 @@ export async function getChallengeFromVerifier(verifier: string) {
     const base64encoded = base64urlencode(hashed);
     return base64encoded;
 }
+
+export const decodeAddress = (address: string): string | null => {
+    try {
+        const addressWords = bech32.decode(address, address.length);
+        const payload = bech32.fromWords(addressWords.words);
+        return `${Buffer.from(payload).toString('hex')}`;
+    } catch (error) {
+        return null;
+    }
+};

@@ -21,7 +21,7 @@ export class HandlesApi {
             throw new Error("handle is required");
         }
         const handleJson = await this.apiRequest(`/handles/${handle}`) as IHandle;
-        // This should be coming ffrom the API. The API needs to start setting this
+        // This should be coming from the API. The API needs to start setting this
         handleJson.policy = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
         return handleJson;
     }
