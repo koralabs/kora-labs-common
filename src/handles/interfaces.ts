@@ -1,4 +1,4 @@
-import { BoolInt, HexString, HexStringOrEmpty } from "../types";
+import { BoolInt, HexString, HexStringOrEmpty } from '../types';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -203,18 +203,19 @@ export interface ISubHandleSettings {
     tier_pricing?: [number, number][];
     pz_enabled?: BoolInt;
     creator_defaults?: ISubHandleSettingsCreatorDefaults;
-    /** 
+    /**
      * Used for virtual SubHandles. The slot which the virtual SubHandle expires
-     * 
+     *
      * 0 = never expires
-    */
+     */
     expires_slot?: number;
 }
 
-export interface ISubHandleAdminSettings { // `sh_settings`
-    valid_contracts: HexString[]
-    admin_creds: HexString[]
-    base_price: number
+export interface ISubHandleAdminSettings {
+    // `sh_settings`
+    valid_contracts: HexString[];
+    admin_creds: HexString[];
+    base_price: number;
     buy_down_prices: [number, number][];
 }
 
@@ -222,7 +223,8 @@ export interface ISubHandleSettingsDatum {
     nft?: ISubHandleSettings;
     virtual?: ISubHandleSettings;
     buy_down_paid?: number; // how much they have paid to buy down
-    buy_down_price?: number; // The current price they have paid for (we give the better price between the two)
+    buy_down_price?: number; // The current price they have paid for (we give the better price between the two),
+    agreed_terms?: string;
 }
 
 export interface IHandleFileContent {
@@ -279,11 +281,14 @@ export enum OAuthSocial {
 }
 
 export interface OAuthToken {
-    identifier: string;
-    username: string;
     token: string;
     refresh_token: string;
     expiredAt: string;
+}
+
+export interface OAuthSocialToken extends OAuthToken {
+    identifier: string;
+    username: string;
     social: OAuthSocial;
 }
 
