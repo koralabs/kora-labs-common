@@ -16,10 +16,10 @@ export interface KeyPair {
 export enum AssetNameLabel {
     LBL_000 = '00000000',
     LBL_001 = '00001070',
-    LBL_002 = '000020E0',
-    LBL_100 = '000643B0',
+    LBL_002 = '000020e0',
+    LBL_100 = '000643b0',
     LBL_222 = '000de140',
-    LBL_444 = '001BC280',
+    LBL_444 = '001bc280'
 }
 
 export enum CardanoNetwork {
@@ -29,4 +29,4 @@ export enum CardanoNetwork {
     UNSET = 'UNSET'
 }
 
-export type Network = 'preview' | 'preprod' | 'mainnet'
+export type Network = 'preview' | 'preprod' | 'mainnet';
