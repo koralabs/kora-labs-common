@@ -195,7 +195,7 @@ export interface IPzDatum {
 }
 
 export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
-    bg_image: string;
+    bg_image?: string;
 }
 
 export interface ISubHandleSettings {
