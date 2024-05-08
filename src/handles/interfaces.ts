@@ -225,6 +225,7 @@ export interface ISubHandleSettingsDatum {
     buy_down_paid?: number; // how much they have paid to buy down
     buy_down_price?: number; // The current price they have paid for (we give the better price between the two),
     agreed_terms?: string;
+    payment_address?: string;
     migrate_sig_required?: BoolInt;
 }
 
@@ -242,6 +243,7 @@ export type ISubHandleSettingsDatumStruct = [
     number, // buy_down_paid
     number, // buy_down_price
     string, // agreed_terms
+    string, // payment_address
     BoolInt // migrate_sig_required
 ];
 
