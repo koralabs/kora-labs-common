@@ -21,6 +21,6 @@ export const subHandleSettingsDatumSchema = {
     '[2]': 'number',
     '[3]': 'number',
     '[4]': 'string',
-    '[5]': 'string',
+    '[5]': 'hex',
     '[6]': 'bool'
 };
