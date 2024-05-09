@@ -198,19 +198,6 @@ export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
     bg_image?: string;
 }
 
-export interface ISubHandleSettings {
-    public_minting_enabled?: BoolInt;
-    tier_pricing?: [number, number][];
-    pz_enabled?: BoolInt;
-    creator_defaults?: ISubHandleSettingsCreatorDefaults;
-    /**
-     * Used for virtual SubHandles. The slot which the virtual SubHandle expires
-     *
-     * 0 = never expires
-     */
-    expires_slot?: number;
-}
-
 export interface ISubHandleAdminSettings {
     // `sh_settings`
     valid_contracts: HexString[];
@@ -219,14 +206,22 @@ export interface ISubHandleAdminSettings {
     buy_down_prices: [number, number][];
 }
 
-export interface ISubHandleSettingsDatum {
-    nft?: ISubHandleSettings;
-    virtual?: ISubHandleSettings;
+export interface ISubHandleTypeSettings {
+    public_minting_enabled?: boolean;
+    pz_enabled?: boolean;
+    tier_pricing?: [number, number][];
+    creator_defaults?: ISubHandleSettingsCreatorDefaults;
+    expires_slot?: number; // 0 = never expires
+}
+
+export interface ISubHandleSettings {
+    nft?: ISubHandleTypeSettings;
+    virtual?: ISubHandleTypeSettings;
     buy_down_paid?: number; // how much they have paid to buy down
     buy_down_price?: number; // The current price they have paid for (we give the better price between the two),
     agreed_terms?: string;
     payment_address?: string;
-    migrate_sig_required?: BoolInt;
+    migrate_sig_required?: boolean;
 }
 
 export type ISubHandleSettingsItemDatumStruct = [
