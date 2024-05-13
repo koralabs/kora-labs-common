@@ -151,6 +151,11 @@ export enum HandleType {
     HANDLE = 'handle'
 }
 
+export enum SubHandleType {
+    VIRTUAL = 'virtual',
+    NFT = 'nft'
+}
+
 export interface IHandleMetadata {
     name: string;
     image: string;
@@ -192,6 +197,9 @@ export interface IPzDatum {
     resolved_addresses?: {
         [key: string]: string;
     };
+    // Virtual SubHandle Specific
+    expires_slot?: number; // 0 = never expires
+    is_private?: BoolInt;
 }
 
 export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
