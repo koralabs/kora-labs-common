@@ -7,7 +7,10 @@ export const handleDatumSchema = {
             og: 'bool',
             rarity: 'string',
             characters: 'string',
-            numeric_modifiers: 'string'
+            numeric_modifiers: 'string',
+            sub_rarity: 'string',
+            sub_characters: 'string',
+            sub_numeric_modifiers: 'string'
         },
         '[2]': {
             standard_image: 'string',
