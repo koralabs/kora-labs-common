@@ -175,6 +175,13 @@ export interface IHandleMetadata {
 }
 
 export interface IPzDatum {
+    virtual?: {
+        expires_slot: number; // 0 = never expires
+        public_mint: BoolInt;
+    };
+    resolved_addresses?: {
+        [key: string]: string;
+    };
     standard_image: string; // ipfs://cid
     image_hash: HexStringOrEmpty; // sha256 checksum of custom handle jpeg
     standard_image_hash: HexStringOrEmpty; // sha256 checksum of standard_image jpeg
@@ -194,32 +201,29 @@ export interface IPzDatum {
     svg_version: string;
     agreed_terms: string; //https://adahandle.com/tou
     migrate_sig_required: BoolInt;
-    resolved_addresses?: {
-        [key: string]: string;
-    };
-    // Virtual SubHandle Specific
-    expires_slot?: number; // 0 = never expires
-    is_private?: BoolInt;
 }
 
 export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
     bg_image?: string;
+    expires_slot?: number;
 }
 
-export interface ISubHandleAdminSettings {
-    // `sh_settings`
-    valid_contracts: HexString[];
-    admin_creds: HexString[];
-    base_price: number;
-    buy_down_prices: [number, number][];
-}
+// `sh_settings`
+export type ISubHandleAdminSettings = [
+    HexString[], //valid_contracts
+    HexString[], //admin_creds
+    number, // virtual price
+    number, // base price
+    [number, number][], // buy_down_prices
+    HexString, // payment address
+    number //expiry_duration
+];
 
 export interface ISubHandleTypeSettings {
     public_minting_enabled?: boolean;
     pz_enabled?: boolean;
     tier_pricing?: [number, number][];
     creator_defaults?: ISubHandleSettingsCreatorDefaults;
-    expires_slot?: number; // 0 = never expires
 }
 
 export interface ISubHandleSettings {
@@ -227,6 +231,7 @@ export interface ISubHandleSettings {
     virtual?: ISubHandleTypeSettings;
     buy_down_paid?: number; // how much they have paid to buy down
     buy_down_price?: number; // The current price they have paid for (we give the better price between the two),
+    buy_down_percent?: number; // The current percentage they have paid for (we give the better price between the two),
     agreed_terms?: string;
     payment_address?: string;
     migrate_sig_required?: boolean;
@@ -236,18 +241,18 @@ export type ISubHandleSettingsItemDatumStruct = [
     BoolInt, // public_minting_enabled
     BoolInt, // pz_enabled
     [number, number][], // tier_pricing
-    ISubHandleSettingsCreatorDefaults,
-    number
+    ISubHandleSettingsCreatorDefaults
 ];
 
 export type ISubHandleSettingsDatumStruct = [
     ISubHandleSettingsItemDatumStruct, // nft
     ISubHandleSettingsItemDatumStruct, // virtual
-    number, // buy_down_paid
     number, // buy_down_price
+    number, // buy_down_paid
+    number, // buy_down_percent
     string, // agreed_terms
-    string, // payment_address
-    BoolInt // migrate_sig_required
+    BoolInt, // migrate_sig_required
+    string // payment_address
 ];
 
 export interface IHandleFileContent {
