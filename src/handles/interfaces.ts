@@ -201,6 +201,7 @@ export interface IPzDatum {
     svg_version: string;
     agreed_terms: string; //https://adahandle.com/tou
     migrate_sig_required: BoolInt;
+    original_address?: HexStringOrEmpty;
 }
 
 export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
@@ -208,7 +209,20 @@ export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
     expires_slot?: number;
 }
 
-// `sh_settings`
+/**
+ *
+ * Handle: sh_settings
+ * [
+ *   valid_contracts,
+ *   admin_creds,
+ *   virtual price,
+ *   base price,
+ *   buy_down_prices,
+ *   payment address,
+ *  expiry_duration
+ * ]
+ *
+ */
 export type ISubHandleAdminSettings = [
     HexString[], //valid_contracts
     HexString[], //admin_creds
