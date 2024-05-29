@@ -122,6 +122,7 @@ export interface IHandle {
     svg_version: string;
     version: number;
     policy?: string;
+    handle_type: HandleType;
 }
 
 export interface ICip68Handle extends IHandle {
@@ -258,9 +259,21 @@ export type ISubHandleSettingsItemDatumStruct = [
     ISubHandleSettingsCreatorDefaults
 ];
 
+/**
+ *
+ * @property {ISubHandleSettingsDatumStruct} [0] - nft
+ * @property {ISubHandleSettingsDatumStruct} [1] - virtual
+ * @property {number} [2] - buy_down_price
+ * @property {number} [3] - buy_down_paid
+ * @property {number} [4] - buy_down_percent
+ * @property {string} [5] - agreed_terms
+ * @property {BoolInt} [6] - migrate_sig_required
+ * @property {string} [7] - payment_address
+ *
+ */
 export type ISubHandleSettingsDatumStruct = [
-    ISubHandleSettingsItemDatumStruct, // nft
-    ISubHandleSettingsItemDatumStruct, // virtual
+    ISubHandleSettingsItemDatumStruct,
+    ISubHandleSettingsItemDatumStruct,
     number, // buy_down_price
     number, // buy_down_paid
     number, // buy_down_percent
