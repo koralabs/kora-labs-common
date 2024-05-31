@@ -20,7 +20,8 @@ export const subHandleSettingsDatumSchema = {
     '[1]': subHandleSettings,
     '[2]': 'number',
     '[3]': 'number',
-    '[4]': 'string',
-    '[5]': 'hex',
-    '[6]': 'bool'
+    '[4]': 'number',
+    '[5]': 'string',
+    '[6]': 'bool',
+    '[7]': 'hex'
 };
