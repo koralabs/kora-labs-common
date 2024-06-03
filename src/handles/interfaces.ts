@@ -59,6 +59,11 @@ export interface IPersonalizationPortal {
     custom_settings?: string[] | null;
 }
 
+export enum ScriptType {
+    PZ_CONTRACT = 'pz_contract',
+    SUB_HANDLE_SETTINGS = 'sub_handle_settings'
+}
+
 export interface ScriptDetails {
     handle: string;
     handleHex: string;
@@ -68,6 +73,8 @@ export interface ScriptDetails {
     unoptimizedCbor?: string;
     validatorHash: string;
     latest?: boolean;
+    type: ScriptType;
+    txBuildVersion?: number;
 }
 
 export interface IReferenceToken {
