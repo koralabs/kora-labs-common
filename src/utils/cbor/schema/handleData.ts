@@ -25,9 +25,15 @@ export const handleDatumSchema = {
                 ada: 'hex',
                 '<string>': 'string'
             },
+            migrate_sig_required: 'bool',
             trial: 'bool',
             nsfw: 'bool',
-            svg_version: 'string'
+            svg_version: 'string',
+            virtual: {
+                expires_slot: 'number',
+                public_mint: 'bool'
+            },
+            original_address: 'hex'
         }
     }
 };
