@@ -130,6 +130,11 @@ export interface IHandle {
     version: number;
     policy?: string;
     handle_type: HandleType;
+    virtual?: {
+        expires_slot: number; // 0 = never expires
+        public_mint: boolean;
+    };
+    original_address?: string;
 }
 
 export interface ICip68Handle extends IHandle {
