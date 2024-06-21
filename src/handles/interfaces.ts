@@ -217,7 +217,7 @@ export interface IPzDatum {
     original_address?: HexStringOrEmpty;
 }
 
-export interface ISubHandleSettingsCreatorDefaults extends ICreatorDefaults {
+export interface ISubHandleSettingsDefaultStyles extends ICreatorDefaults {
     bg_image?: string;
     expires_slot?: number;
 }
@@ -250,7 +250,8 @@ export interface ISubHandleTypeSettings {
     public_minting_enabled?: boolean;
     pz_enabled?: boolean;
     tier_pricing?: [number, number][];
-    creator_defaults?: ISubHandleSettingsCreatorDefaults;
+    default_styles?: ISubHandleSettingsDefaultStyles;
+    save_original_address?: boolean;
 }
 
 export interface ISubHandleSettings {
@@ -268,7 +269,8 @@ export type ISubHandleSettingsItemDatumStruct = [
     BoolInt, // public_minting_enabled
     BoolInt, // pz_enabled
     [number, number][], // tier_pricing
-    ISubHandleSettingsCreatorDefaults
+    ISubHandleSettingsDefaultStyles,
+    BoolInt // save_original_address
 ];
 
 /**
