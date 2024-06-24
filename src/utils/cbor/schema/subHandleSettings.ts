@@ -12,7 +12,8 @@ const subHandleSettings = {
         qr_image: 'string',
         font: 'string',
         text_ribbon_gradient: 'string'
-    }
+    },
+    '[4]': 'bool'
 };
 
 export const subHandleSettingsDatumSchema = {
