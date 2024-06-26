@@ -53,25 +53,21 @@ export const isAlphaNumeric = (str: string): boolean => {
     return /^[a-zA-Z0-9]+$/.test(str);
 };
 
-export const getDateFromSlot = (currentSlot: number): number => {
+export const getDateFromSlot = (currentSlot: number, network?: string): number => {
     // TODO: Make this work for all networks
     //console.log(`preview slot date = ${new Date(currentSlot * 1000)}`)
-    if (process.env.NETWORK?.toLowerCase() == 'preview') {
-        return (1666656000 + currentSlot) * 1000;
-    }
-    if (process.env.NETWORK?.toLowerCase() == 'preprod') {
-        return (1654041600 + currentSlot) * 1000;
-    }
+    const currentNetwork = network ? network.toLowerCase() : process.env.NETWORK?.toLowerCase();
+    if (currentNetwork == 'preview') return (1666656000 + currentSlot) * 1000;
+    if (currentNetwork == 'preprod') return (1654041600 + currentSlot) * 1000;
+
     return (1596491091 + (currentSlot - 4924800)) * 1000;
 };
 
-export const getSlotNumberFromDate = (date: Date): number => {
-    if (process.env.NETWORK?.toLowerCase() == 'preview') {
-        return Math.floor(date.getTime() / 1000) - 1666656000;
-    }
-    if (process.env.NETWORK?.toLowerCase() == 'preprod') {
-        return Math.floor(date.getTime() / 1000) - 1654041600;
-    }
+export const getSlotNumberFromDate = (date: Date, network?: string): number => {
+    const currentNetwork = network ? network.toLowerCase() : process.env.NETWORK?.toLowerCase();
+    if (currentNetwork == 'preview') return Math.floor(date.getTime() / 1000) - 1666656000;
+    if (currentNetwork == 'preprod') return Math.floor(date.getTime() / 1000) - 1654041600;
+
     // Ignore parens to show intent
     // prettier-ignore
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
@@ -79,4 +75,4 @@ export const getSlotNumberFromDate = (date: Date): number => {
 
 export { DefaultTextFormat as KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
 
-export * from './crypto'
+export * from './crypto';
