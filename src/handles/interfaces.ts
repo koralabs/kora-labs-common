@@ -77,7 +77,7 @@ export interface ScriptDetails {
     txBuildVersion?: number;
 }
 
-export interface IReferenceToken {
+export interface IUTxO {
     tx_id: string;
     index: number;
     lovelace: number;
@@ -85,6 +85,8 @@ export interface IReferenceToken {
     address: string;
     script?: ScriptDetails;
 }
+
+export interface IReferenceToken extends IUTxO {}
 
 export interface IPersonalization {
     portal?: IPersonalizationPortal;
