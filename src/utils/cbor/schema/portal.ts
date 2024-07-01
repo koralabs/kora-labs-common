@@ -4,5 +4,6 @@ export const portalSchema = {
     custom_settings: {
         '[all]': 'string'
     },
+    gallery_setting: 'string',
     default: 'bool'
 };
