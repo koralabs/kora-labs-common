@@ -57,6 +57,7 @@ export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
     custom_settings?: string[] | null;
+    gallery_settings?: string | null;
 }
 
 export enum ScriptType {
@@ -219,9 +220,8 @@ export interface IPzDatum {
     original_address?: HexStringOrEmpty;
 }
 
-export interface ISubHandleSettingsDefaultStyles extends ICreatorDefaults {
+export interface ISubHandleSettingsDefaultStyles extends IPersonalizationDesigner {
     bg_image?: string;
-    expires_slot?: number;
 }
 
 /**
