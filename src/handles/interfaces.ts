@@ -38,6 +38,7 @@ export interface IPersonalizationDesigner extends ISharedPzDesigner {
     qr_link?: string;
     socials?: SocialItem[];
     creator_defaults_enabled?: BoolInt;
+    custom_dollar_symbol?: BoolInt;
 }
 
 export interface ICreatorDefaults extends ISharedPzDesigner {
