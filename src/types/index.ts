@@ -1,3 +1,5 @@
+export * from './gallery';
+
 export type BoolInt = 0 | 1;
 export type HexString = `0x${string}`;
 export type HexStringOrEmpty = HexString | '';

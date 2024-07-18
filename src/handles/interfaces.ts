@@ -1,4 +1,4 @@
-import { BoolInt, HexString, HexStringOrEmpty } from '../types';
+import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../types';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -38,6 +38,7 @@ export interface IPersonalizationDesigner extends ISharedPzDesigner {
     qr_link?: string;
     socials?: SocialItem[];
     creator_defaults_enabled?: BoolInt;
+    custom_dollar_symbol?: BoolInt;
 }
 
 export interface ICreatorDefaults extends ISharedPzDesigner {
@@ -53,11 +54,21 @@ export interface ICreatorDefaults extends ISharedPzDesigner {
     circuit_colors?: HexStringOrEmpty[]; //  ["0a1fd3ff", "22d1af88", "31bc2399"]
 }
 
+export interface GallerySettings {
+    include: string[];
+    exclude: string[];
+    align: 'center' | 'left' | 'right';
+    groupBy: 'policy' | 'none';
+    featured: FeaturedItemType[];
+    sort: 'amount' | 'name';
+    displayAmount: boolean;
+}
+
 export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
     custom_settings?: string[] | null;
-    gallery_settings?: string | null;
+    gallery_settings?: GallerySettings | null;
 }
 
 export enum ScriptType {
