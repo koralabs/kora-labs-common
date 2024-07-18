@@ -12,4 +12,8 @@ describe('validation tests', () => {
             valid: false
         });
     });
+    it('should return true for SubHandle', () => {
+        const result = checkHandlePattern('aaaaaaaaaaaaaaaaaaaaaaaaa@tt');
+        expect(result).toEqual({ message: 'Yay! This handle is available.', valid: true });
+    });
 });

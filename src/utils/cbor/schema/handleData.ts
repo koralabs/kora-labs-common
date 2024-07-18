@@ -30,7 +30,7 @@ export const handleDatumSchema = {
             nsfw: 'bool',
             svg_version: 'string',
             virtual: {
-                expires_slot: 'number',
+                expires_time: 'number',
                 public_mint: 'bool'
             },
             original_address: 'hex'

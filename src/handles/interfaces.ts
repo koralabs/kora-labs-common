@@ -134,7 +134,7 @@ export interface IHandle {
     policy?: string;
     handle_type: HandleType;
     virtual?: {
-        expires_slot: number; // 0 = never expires
+        expires_time: number;
         public_mint: boolean;
     };
     original_address?: string;
@@ -192,7 +192,7 @@ export interface IHandleMetadata {
 
 export interface IPzDatum {
     virtual?: {
-        expires_slot: number; // 0 = never expires
+        expires_time: number;
         public_mint: BoolInt;
     };
     resolved_addresses?: {
