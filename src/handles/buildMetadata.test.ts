@@ -5,6 +5,7 @@ describe('buildMetadata', () => {
     it('should build metadata', () => {
         const input = {
             handleName: 'test',
+            handleType: HandleType.HANDLE,
             cid: 'cid123',
             ogNumber: 1
         };
@@ -27,6 +28,7 @@ describe('buildMetadata', () => {
     it('should build metadata for nft sub handle', () => {
         const input = {
             handleName: 'sub@handle',
+            handleType: HandleType.NFT_SUBHANDLE,
             cid: 'cid111'
         };
         const metadata = buildMetadata(input);
@@ -52,6 +54,7 @@ describe('buildMetadata', () => {
     it('should build metadata for nft sub handle with numbers', () => {
         const input = {
             handleName: '...@-123',
+            handleType: HandleType.NFT_SUBHANDLE,
             cid: 'cid222'
         };
         const metadata = buildMetadata(input);
