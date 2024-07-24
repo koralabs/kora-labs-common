@@ -33,7 +33,8 @@ export const handleDatumSchema = {
                 expires_time: 'number',
                 public_mint: 'bool'
             },
-            original_address: 'hex'
+            original_address: 'hex',
+            agreed_terms: 'string'
         }
     }
 };
