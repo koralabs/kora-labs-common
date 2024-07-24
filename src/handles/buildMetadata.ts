@@ -37,10 +37,12 @@ const buildNumericModifiers = (name: string): string => {
 
 export const buildMetadata = ({
     handleName,
+    handleType,
     cid,
     ogNumber
 }: {
     handleName: string;
+    handleType: HandleType;
     cid: string;
     ogNumber?: number;
 }) => {
@@ -56,7 +58,7 @@ export const buildMetadata = ({
         length: handleName.length,
         characters: buildCharacters(rootHandleName ?? handleName),
         numeric_modifiers: buildNumericModifiers(rootHandleName ?? handleName),
-        handle_type: isSubHandle ? HandleType.NFT_SUBHANDLE : HandleType.HANDLE,
+        handle_type: handleType,
         version: 1
     };
 
