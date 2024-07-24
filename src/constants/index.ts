@@ -7,3 +7,4 @@ export const IS_PRODUCTION = IS_SERVER
           window.location.host.includes('localhost')
       );
 export const AUTH_GRANT_DURATION = 1000 * 60 * 60 * 24 * 30; // 30 days
+export const TOU_URL = 'https://handle.me/$/tou';
