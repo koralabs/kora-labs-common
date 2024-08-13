@@ -133,6 +133,7 @@ export interface IHandle {
     created_slot_number: number;
     updated_slot_number: number;
     utxo: string;
+    lovelace: number;
     has_datum: boolean;
     datum?: string;
     script?: {

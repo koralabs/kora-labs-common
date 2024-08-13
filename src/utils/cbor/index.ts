@@ -47,7 +47,7 @@ export interface EncodeOptions {
      * {indefiniteArrays: false} // will preceed the array with the CBOR Major Type `8n[...]` (where `n` is the length of the array)
     */
     indefiniteArrays?: boolean,
-    /**Whether strings should all be converted to CBOR byte strings or text strings. Defaults to `false`
+    /**Whether strings should all be converted to CBOR byte strings or text strings. Defaults to `true`
      * @example
      * {defaultToText: false} // will preceed the bytes with the CBOR Major Type `4n[...]` (bytes)
      * {defaultToText: true} // will preceed the bytes with the CBOR Major Type `6n[...]` (text)
