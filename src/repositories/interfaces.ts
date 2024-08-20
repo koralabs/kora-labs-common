@@ -3,8 +3,10 @@ export interface IOAuthRepo {
     saveClient(authClient: AuthClient): Promise<void>;
     updateClient(clientId: string, updatedData: Partial<AuthClient>): Promise<void>;
     deleteClient(clientId: string): Promise<void>;
+    deleteGrant(handle: string, clientId: string): Promise<void>;
     getClient(clientId?: string | null): Promise<AuthClient>;
     getGrant(handle?: string | null, clientId?: string | null): Promise<AuthGrant>;
+    getAllGrants(handle?: string | null): Promise<AuthGrant[]>;
     setGrant(grant?: AuthGrant): Promise<void>;
     getPermissions(): Promise<FriendlyPermissions>;
     validateAccessToken(clientId: string, handle: string, accessToken: string): Promise<boolean>;
@@ -20,8 +22,6 @@ export interface AuthClient {
     failureUri: string;
     handle: string;
     holderAddress: string;
-    applicationName: string;
-
 }
 
 export interface AuthGrant {
@@ -31,6 +31,7 @@ export interface AuthGrant {
     authCode?: string;
     handle?: string;
     holderAddress?: string;
+    projectName?: string;
     accessToken?: string;
     refreshToken?: string;
     issueDate?: number;
