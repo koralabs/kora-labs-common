@@ -1,3 +1,5 @@
+import { AssetNameLabel } from '../types';
+
 export const delay = (ms: number): Promise<void> => {
     return new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -72,6 +74,15 @@ export const getSlotNumberFromDate = (date: Date, network?: string): number => {
     // prettier-ignore
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
 };
+
+export const parseAssetNameLabel = (assetName: string): AssetNameLabel | null => {
+    for(const lbl in AssetNameLabel) {
+        if (assetName.startsWith(AssetNameLabel[lbl as keyof typeof AssetNameLabel])) {
+            return lbl as AssetNameLabel;
+        }
+    }
+    return null;
+}
 
 export { DefaultTextFormat as KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
 
