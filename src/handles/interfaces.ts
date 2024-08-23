@@ -151,6 +151,7 @@ export interface IHandle {
         public_mint: boolean;
     };
     original_address?: string;
+    pz_enabled?: boolean;
 }
 
 export interface ICip68Handle extends IHandle {
@@ -231,6 +232,7 @@ export interface IPzDatum {
     agreed_terms: string; //https://adahandle.com/tou
     migrate_sig_required: BoolInt;
     original_address?: HexStringOrEmpty;
+    pz_enabled?: BoolInt;
 }
 
 export interface ISubHandleSettingsDefaultStyles extends IPersonalizationDesigner {
