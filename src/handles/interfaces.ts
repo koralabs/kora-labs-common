@@ -240,14 +240,16 @@ export interface IPzDatum {
  */
 export interface IPzDatumConvertedUsingSchema {
     standard_image: string;
-    bg_image: string;
-    pfp_image: string;
-    portal: string;
-    designer: string;
-    socials: string;
-    vendor: string;
+    bg_image?: string;
+    pfp_image?: string;
+    pfp_asset?: HexStringOrEmpty; // 0x<policy><assetName>
+    bg_asset?: HexStringOrEmpty; // 0x<policy><assetName>
+    portal?: string;
+    designer?: string;
+    socials?: string;
+    vendor?: string;
     default: boolean;
-    resolved_addresses: {
+    resolved_addresses?: {
         ada: HexString;
         [key: string]: string;
     };
@@ -255,13 +257,17 @@ export interface IPzDatumConvertedUsingSchema {
     trial: boolean;
     nsfw: boolean;
     svg_version: string;
-    virtual: {
+    virtual?: {
         expires_time: number;
         public_mint: boolean;
     };
-    original_address: HexString;
+    original_address?: HexString;
     agreed_terms: string;
-    pz_enabled: boolean;
+    pz_enabled?: boolean;
+    image_hash: HexStringOrEmpty; // sha256 checksum of custom handle jpeg
+    standard_image_hash: HexStringOrEmpty; // sha256 checksum of standard_image jpe
+    last_update_address: HexStringOrEmpty; // ByteArray, not Bech32
+    validated_by: HexStringOrEmpty; // PubKeyHash
 }
 
 export interface ISubHandleSettingsDefaultStyles extends IPersonalizationDesigner {
