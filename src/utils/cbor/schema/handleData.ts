@@ -34,7 +34,8 @@ export const handleDatumSchema = {
                 public_mint: 'bool'
             },
             original_address: 'hex',
-            agreed_terms: 'string'
+            agreed_terms: 'string',
+            pz_enabled: 'bool'
         }
     }
 };
