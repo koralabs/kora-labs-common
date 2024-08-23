@@ -235,6 +235,35 @@ export interface IPzDatum {
     pz_enabled?: BoolInt;
 }
 
+/**
+ * Comes from handleDatumSchema[2]
+ */
+export interface IPzDatumConvertedUsingSchema {
+    standard_image: string;
+    bg_image: string;
+    pfp_image: string;
+    portal: string;
+    designer: string;
+    socials: string;
+    vendor: string;
+    default: boolean;
+    resolved_addresses: {
+        ada: HexString;
+        [key: string]: string;
+    };
+    migrate_sig_required: boolean;
+    trial: boolean;
+    nsfw: boolean;
+    svg_version: string;
+    virtual: {
+        expires_time: number;
+        public_mint: boolean;
+    };
+    original_address: HexString;
+    agreed_terms: string;
+    pz_enabled: boolean;
+}
+
 export interface ISubHandleSettingsDefaultStyles extends IPersonalizationDesigner {
     bg_image?: string;
 }

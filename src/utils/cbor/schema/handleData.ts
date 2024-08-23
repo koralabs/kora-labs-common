@@ -1,3 +1,6 @@
+/**
+ * If updating, also update IPzDatumConvertedUsingSchema
+ */
 export const handleDatumSchema = {
     constructor_0: {
         '[0]': {
