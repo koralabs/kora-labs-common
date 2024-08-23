@@ -81,6 +81,7 @@ export interface ScriptDetails {
     handleHex: string;
     refScriptUtxo?: string;
     refScriptAddress?: string;
+    datumCbor?: string;
     cbor?: string;
     unoptimizedCbor?: string;
     validatorHash: string;
