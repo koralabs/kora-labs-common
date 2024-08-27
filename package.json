@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "4.4.6",
+    "version": "4.4.7",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -43,6 +43,6 @@
         "bech32": "^2.0.0",
         "boolean": "^3.2.0",
         "cbor": "^9.0.2",
-        "pluralize": "^8.0.0"
+        "pluralize-esm": "^9.0.5"
     }
 }
