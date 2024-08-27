@@ -370,8 +370,35 @@ export interface PzSettings {
     pz_providers: { [pubKeyHashBytes: HexString]: HexStringOrEmpty }; // { PubKeyHashBytes: ValidatorKeyHashBytes }
     valid_contracts: HexStringOrEmpty[]; // ValidatorKeyHashBytes[]
     admin_creds: HexStringOrEmpty[]; // PubKeyHashBytes[]
-    settings_cred: HexStringOrEmpty; // ValidatorKeyHashBytes
+    settings_cred: HexStringOrEmpty; // ValidatorKeyHashBytes,
+    grace_period: number; // seconds
+    subhandle_share_percent: number; // percentage
 }
+
+/**
+ *
+ * @property {number} [0] - treasury_fee
+ * @property {string} [1] - treasury_cred
+ * @property {number} [2] - pz_min_fee
+ * @property {[key: string]: string;} [3] - pz_providers
+ * @property {string[]} [4] - valid_contracts
+ * @property {string[]} [5] - admin_creds
+ * @property {string} [6] - settings_cred
+ * @property {number} [7] - grace_period
+ * @property {number} [8] - subhandle_share_percent
+ *
+ */
+export type IPzSettingsDatumStruct = [
+    number, // treasury_fee
+    string, // treasury_cred
+    number, // pz_min_fee
+    { [key: string]: string }, // pz_providers
+    string[], // valid_contracts
+    string[], // admin_creds
+    string, // settings_cred
+    number, // grace_period
+    number // subhandle_share_percent
+];
 
 export interface ApprovedPolicies {
     [policyId: HexString]: {
