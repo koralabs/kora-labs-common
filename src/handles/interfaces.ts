@@ -133,6 +133,7 @@ export interface IHandle {
     };
     created_slot_number: number;
     updated_slot_number: number;
+    last_edited_time?: number;
     utxo: string;
     lovelace: number;
     has_datum: boolean;
@@ -219,6 +220,7 @@ export interface IPzDatum {
     pfp_image?: string; // ipfs://cid
     pfp_asset?: HexStringOrEmpty; // 0x<policy><assetName>
     bg_asset?: HexStringOrEmpty; // 0x<policy><assetName>
+    last_edited_time: number; // timestamp in milliseconds
     portal?: string;
     designer?: string; // ipfs://cid containing IPersonalizationDesigner
     socials?: string;
@@ -249,6 +251,7 @@ export interface IPzDatumConvertedUsingSchema {
     socials?: string;
     vendor?: string;
     default: boolean;
+    last_edited_time?: number;
     resolved_addresses?: {
         ada: HexString;
         [key: string]: string;
