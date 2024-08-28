@@ -220,7 +220,7 @@ export interface IPzDatum {
     pfp_image?: string; // ipfs://cid
     pfp_asset?: HexStringOrEmpty; // 0x<policy><assetName>
     bg_asset?: HexStringOrEmpty; // 0x<policy><assetName>
-    last_edited_time: number; // timestamp in milliseconds
+    last_edited_time?: number; // timestamp in milliseconds
     portal?: string;
     designer?: string; // ipfs://cid containing IPersonalizationDesigner
     socials?: string;
