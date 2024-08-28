@@ -1,4 +1,4 @@
-import pluralize from 'pluralize';
+import pluralize from 'pluralize-esm';
 import { words } from './protectedWords';
 import { delay } from '../utils';
 import { AvailabilityResponse, AvailabilityResponseCode, ReservedOrProtected } from '../handles/interfaces';
