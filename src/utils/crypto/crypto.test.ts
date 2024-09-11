@@ -50,18 +50,18 @@ describe('Serialization Test', () => {
 
     describe('getPaymentKeyHash', () => {
         it('should get payment keyhash from Shelley addresses', async () => {
-            expect(await (getPaymentKeyHash("addr_test1vpe49pprjs8lxwjtf8h09dklg8henc2dw3xjp9dgcxyjyusf6672w")))
-                .toEqual("73528423940ff33a4b49eef2b6df41ef99e14d744d2095a8c1892272");
-            expect(await (getPaymentKeyHash("addr_test1xznnmfk43w5cag3m7e9nnfe0wcsg5lx8afv4u9utjk3zxvy4cujapvhtklq9nl02hvl4z6p24lgtwgplelma7w78hxpqrxzwz4")))
-                .toEqual("a73da6d58ba98ea23bf64b39a72f76208a7cc7ea595e178b95a22330");
-            expect(await (getPaymentKeyHash("addr_test1qpnqgjfm0y2dnjsyauvteu8u034x7nxjjms8dxtjck8msplan4acsu62leue4yrwmt6spxr8qzpkmw2vw59mlgr2jagsslke7a")))
-                .toEqual("6604493b7914d9ca04ef18bcf0fc7c6a6f4cd296e0769972c58fb807");
+            expect(await (getPaymentKeyHash('addr_test1vpe49pprjs8lxwjtf8h09dklg8henc2dw3xjp9dgcxyjyusf6672w')))
+                .toEqual('73528423940ff33a4b49eef2b6df41ef99e14d744d2095a8c1892272');
+            expect(await (getPaymentKeyHash('addr_test1xznnmfk43w5cag3m7e9nnfe0wcsg5lx8afv4u9utjk3zxvy4cujapvhtklq9nl02hvl4z6p24lgtwgplelma7w78hxpqrxzwz4')))
+                .toEqual('a73da6d58ba98ea23bf64b39a72f76208a7cc7ea595e178b95a22330');
+            expect(await (getPaymentKeyHash('addr_test1qpnqgjfm0y2dnjsyauvteu8u034x7nxjjms8dxtjck8msplan4acsu62leue4yrwmt6spxr8qzpkmw2vw59mlgr2jagsslke7a')))
+                .toEqual('6604493b7914d9ca04ef18bcf0fc7c6a6f4cd296e0769972c58fb807');
         });
         it('should get payment keyhash from Byron addresses', async () => {
-            expect(await (getPaymentKeyHash("Ae2tdPwUPEZFRbyhz3cpfC2CumGzNkFBN2L42rcUc2yjQpEkxDbkPodpMAi")))
-                .toEqual("ba970ad36654d8dd8f74274b733452ddeab9a62a397746be3c42ccdd");
-            expect(await (getPaymentKeyHash("37btjrVyb4KEB2STADSsj3MYSAdj52X5FrFWpw2r7Wmj2GDzXjFRsHWuZqrw7zSkwopv8Ci3VWeg6bisU9dgJxW5hb2MZYeduNKbQJrqz3zVBsu9nT")))
-                .toEqual("9c708538a763ff27169987a489e35057ef3cd3778c05e96f7ba9450e");
+            expect(await (getPaymentKeyHash('Ae2tdPwUPEZFRbyhz3cpfC2CumGzNkFBN2L42rcUc2yjQpEkxDbkPodpMAi')))
+                .toEqual('ba970ad36654d8dd8f74274b733452ddeab9a62a397746be3c42ccdd');
+            expect(await (getPaymentKeyHash('37btjrVyb4KEB2STADSsj3MYSAdj52X5FrFWpw2r7Wmj2GDzXjFRsHWuZqrw7zSkwopv8Ci3VWeg6bisU9dgJxW5hb2MZYeduNKbQJrqz3zVBsu9nT')))
+                .toEqual('9c708538a763ff27169987a489e35057ef3cd3778c05e96f7ba9450e');
         });
     });
 });

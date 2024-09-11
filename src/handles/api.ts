@@ -1,5 +1,5 @@
-import { HANDLES_API_KEY, KORA_USER_AGENT } from "./constants";
-import { IHandle } from "./interfaces";
+import { HANDLES_API_KEY, KORA_USER_AGENT } from './constants';
+import { IHandle } from './interfaces';
 
 // WHEN WE REVAMP THE SDK, THIS CAN ALL MOVE THERE
 export class HandlesApi {
@@ -18,7 +18,7 @@ export class HandlesApi {
 
     static async getHandle(handle: string) {
         if (!handle){
-            throw new Error("handle is required");
+            throw new Error('handle is required');
         }
         const handleJson = await this.apiRequest(`/handles/${handle}`) as IHandle;
         // This should be coming from the API. The API needs to start setting this
@@ -33,9 +33,9 @@ export class HandlesApi {
         }
         if (!headers){
             headers = {
-                "Accepts": "application/json",
-                "User-Agent": KORA_USER_AGENT,
-                "api-key": HANDLES_API_KEY
+                'Accepts': 'application/json',
+                'User-Agent': KORA_USER_AGENT,
+                'api-key': HANDLES_API_KEY
             }
         }
         // We should probably use cross-fetch since this might get called on the front-end as well

@@ -10,9 +10,9 @@ export class Request {
         this.body = req.body;
     }
     getCookie = (key: string): string | undefined => {
-        let cookies = this.headers["Cookie"];
+        let cookies = this.headers['Cookie'];
         if (!cookies) {
-            cookies = this.headers["cookie"];
+            cookies = this.headers['cookie'];
         }
         let cookie = this._searchCookie(cookies, key);
         if (!cookie) {

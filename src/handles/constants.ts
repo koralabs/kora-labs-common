@@ -1,4 +1,4 @@
-import { IS_PRODUCTION } from "../constants";
+import { IS_PRODUCTION } from '../constants';
 export const RESPONSE_AVAILABLE = 'Yay! This handle is available.';
 export const RESPONSE_UNAVAILABLE_PAID = 'Sorry! This Handle is pending mint or already minted.';
 export const RESPONSE_UNAVAILABLE_ACTIVE_SESSION = 'Pending purchase. Try a different variation.';
