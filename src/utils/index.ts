@@ -1,5 +1,3 @@
-import { AssetNameLabel } from '../types';
-
 export const delay = (ms: number): Promise<void> => {
     return new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -75,14 +73,58 @@ export const getSlotNumberFromDate = (date: Date, network?: string): number => {
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
 };
 
-export const parseAssetNameLabel = (assetName: string): AssetNameLabel | null => {
-    for(const lbl in AssetNameLabel) {
-        if (assetName.startsWith(AssetNameLabel[lbl as keyof typeof AssetNameLabel])) {
-            return lbl as AssetNameLabel;
+export const getElapsedTime = (milliseconds: number) => {
+    const seconds = Math.floor(milliseconds / 1000);
+    const mins = Math.floor(seconds / 60);
+    return `${mins}:${(seconds - mins * 60).toString().padStart(2, '0')}`;
+};
+
+export const objectHasKeys = (o: any) => Object.keys(o).length === 0;
+export const isEmpty = (obj: any) => [Object, Array].includes((obj || {}).constructor) && !Object.entries(obj || {}).length;
+export const isObject = (o: any) => o != null && typeof o === 'object';
+export const hasOwnProperty = (o: any, ...args: [v: PropertyKey]) => Object.prototype.hasOwnProperty.call(o, ...args);
+export const isDate = (d: any) => d instanceof Date;
+export const isEmptyObject = (o: any) => isObject(o) && objectHasKeys(o);
+export const makeObjectWithoutPrototype = () => Object.create(null);
+
+export const diff = (lhs: any, rhs: any) => {
+    if (lhs === rhs) return {}; // equal return no diff
+
+    if (!isObject(lhs) || !isObject(rhs)) return rhs; // return updated rhs
+
+    const deletedValues = Object.keys(lhs).reduce((acc, key) => {
+        if (!hasOwnProperty(rhs, key)) {
+            acc[key] = undefined;
         }
+
+        return acc;
+    }, makeObjectWithoutPrototype());
+
+    if (isDate(lhs) || isDate(rhs)) {
+        if (lhs.valueOf() == rhs.valueOf()) return {};
+        return rhs;
     }
-    return null;
-}
+
+    if (Array.isArray(lhs) || Array.isArray(rhs)) {
+        if (lhs.length === rhs.length && JSON.stringify(lhs) === JSON.stringify(rhs)) return {}; // return no diff
+        return rhs; // return updated rhs
+    }
+
+    return Object.keys(rhs).reduce((acc, key) => {
+        if (!hasOwnProperty(lhs, key)) {
+            acc[key] = rhs[key]; // return added r key
+            return acc;
+        }
+
+        const difference = diff(lhs[key], rhs[key]);
+
+        // If the difference is empty, and the lhs is an empty object or the rhs is not an empty object
+        if (isEmptyObject(difference) && !isDate(difference) && (isEmptyObject(lhs[key]) || !isEmptyObject(rhs[key]))) return acc; // return no diff
+
+        acc[key] = difference; // return updated key
+        return acc; // return updated key
+    }, deletedValues);
+};
 
 export { DefaultTextFormat as KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
 

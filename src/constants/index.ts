@@ -1,6 +1,7 @@
 export const IS_SERVER = typeof process !== 'undefined' && typeof process.versions.node !== 'undefined';
+export const NETWORK = process.env.NETWORK?.toLowerCase() ?? 'preview';
 export const IS_PRODUCTION = IS_SERVER
-    ? process.env.NODE_ENV?.trim() === 'production' && process.env.NETWORK?.toLowerCase() == 'mainnet'
+    ? process.env.NODE_ENV?.trim() === 'production' && NETWORK == 'mainnet'
     : !(
           window.location.host.includes('preview.') ||
           window.location.host.includes('preprod.') ||

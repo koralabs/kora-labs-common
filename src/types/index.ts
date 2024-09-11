@@ -32,3 +32,25 @@ export enum CardanoNetwork {
 }
 
 export type Network = 'preview' | 'preprod' | 'mainnet';
+
+export type Sort = 'asc' | 'desc';
+export type SortWithRandom = 'asc' | 'desc' | 'random';
+
+export enum AddressType {
+    Wallet = 'wallet',
+    Enterprise = 'enterprise',
+    Script = 'script',
+    Reward = 'reward',
+    Other = 'other'
+}
+
+export enum StakeAddressType {
+    Script = 'f',
+    Key = 'e'
+}
+
+export interface AddressDetails {
+    address: string;
+    type: string;
+    knownOwnerName: string;
+}

@@ -1,5 +1,27 @@
 import { HandleType, IHandleMetadata } from './interfaces';
-import { getRarity } from './getRarity';
+import { REGEX_SUB_HANDLE, RESPONSE_AVAILABLE, RESPONSE_INVALID_HANDLE_FORMAT, RESPONSE_UNAVAILABLE_LEGENDARY } from './constants';
+import { Rarity } from './interfaces';
+
+export const getRarity = (name: string): Rarity => {
+    const length = name.length;
+    if (1 === length) {
+        return Rarity.legendary;
+    }
+
+    if (2 === length) {
+        return Rarity.ultra_rare;
+    }
+
+    if (3 === length) {
+        return Rarity.rare;
+    }
+
+    if (length > 3 && length < 8) {
+        return Rarity.common;
+    }
+
+    return Rarity.basic;
+};
 
 const buildCharacters = (name: string): string => {
     const characters: string[] = [];
@@ -73,4 +95,27 @@ export const buildMetadata = ({
     }
 
     return metadata;
+};
+
+export const checkHandlePattern = (handle: string, root?: string) => {
+    handle = handle.toLowerCase();
+
+    if (handle.length <= 1) {
+        return {
+            valid: false,
+            message: RESPONSE_UNAVAILABLE_LEGENDARY
+        };
+    }
+
+    if (!handle.match(REGEX_SUB_HANDLE) && (root ? handle.endsWith(`@${root}`) : true)) {
+        return {
+            valid: false,
+            message: RESPONSE_INVALID_HANDLE_FORMAT
+        };
+    }
+
+    return {
+        valid: true,
+        message: RESPONSE_AVAILABLE
+    };
 };

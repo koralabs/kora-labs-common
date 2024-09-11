@@ -12,3 +12,14 @@ export const REGEX_HANDLE = new RegExp(/^[a-zA-Z0-9_.-]{1,15}$/);
 export const REGEX_SUB_HANDLE = new RegExp(/(?:^[a-z0-9_.-]{1,15}$)|(?:^(?!.{29})[a-z0-9_.-]+@[a-z0-9_.-]{1,15}$)/g);
 export const HANDLES_API_KEY = IS_PRODUCTION ? process.env.HANDLES_API_KEY ?? '' : ''
 export const KORA_USER_AGENT = process.env.KORA_USER_AGENT ?? ''
+
+export enum ERROR_TEXT {
+    HANDLE_LIMIT_EXCEEDED = "'records_per_page' must be a number",
+    HANDLE_LIMIT_INVALID_FORMAT = "'records_per_page' can't be more than 1000",
+    HANDLE_SORT_INVALID = "'sort' must be 'desc' or 'asc'",
+    HANDLE_PAGE_INVALID = "'page' must be a number",
+    HANDLE_SLOT_NUMBER_INVALID = "'slot_number' must be a number",
+    HANDLE_PAGE_AND_SLOT_NUMBER_INVALID = "'page' and 'slot_number' can't be used together"
+}
+
+export const HANDLES_PER_PAGE_MAX = 1000;

@@ -1,4 +1,5 @@
-import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../types';
+import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
+import { ISlotHistoryIndex, StoredHandle } from './api';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -355,7 +356,8 @@ export interface IHandleFileContent {
     slot: number;
     hash: string;
     schemaVersion?: number;
-    handles: Record<string, IPersonalizedHandle>;
+    handles: Record<string, StoredHandle>;
+    history: [number, ISlotHistoryIndex][];
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {
