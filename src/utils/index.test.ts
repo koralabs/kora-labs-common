@@ -34,7 +34,7 @@ describe('Utils Tests', () => {
     describe('getDateStringFromSlot', () => {
         it('should get the correct date string from slot', () => {
             const date = getDateStringFromSlot(78200473);
-            expect(date).toEqual(new Date('2025-04-17T02:21:13.000Z'));
+            expect(date).toEqual(new Date('2022-11-30T00:06:04.000Z'));
         });
     });
 

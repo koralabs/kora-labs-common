@@ -19,7 +19,7 @@
     ],
     "scripts": {
         "lint": "eslint . --ext .ts",
-        "test": "node --experimental-vm-modules node_modules/.bin/jest",
+        "test": "NETWORK=mainnet node --experimental-vm-modules node_modules/.bin/jest",
         "build": "tsc",
         "build:local": "yarn build && cp package.json ./lib/package.json && cd lib && npm i --production",
         "npm:publish": "yarn build && cp package.json ./lib/package.json && (cd ./lib && npm publish)"
