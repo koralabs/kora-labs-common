@@ -1,12 +1,11 @@
 import { IHandleStats, IUTxO } from '..';
-import { HolderAddressDetails } from './api';
 import { HandlePaginationModel } from '../models/handlePagination.model';
 import { HandleSearchModel } from '../models/handleSearch.model';
 import { HolderPaginationModel } from '../models/holderPagination.model';
-import { IHandleStoreMetrics, SaveMintingTxInput, SavePersonalizationInput, SaveSubHandleSettingsInput, SaveWalletAddressMoveInput, StoredHandle } from './api';
+import { HolderAddressDetails, IHandleStoreMetrics, SaveMintingTxInput, SavePersonalizationInput, SaveSubHandleSettingsInput, SaveWalletAddressMoveInput, StoredHandle } from './api';
 
 export interface IHandlesRepository {
-    initialize: () => Promise<IHandlesRepository>;
+    initialize: () => IHandlesRepository;
     getAll: (params: { pagination: HandlePaginationModel; search: HandleSearchModel }) => Promise<{ searchTotal: number; handles: StoredHandle[] }>;
     getHandlesByPaymentKeyHashes: (hashes: string[]) => string[];
     getHandlesByAddresses: (addresses: string[]) => string[];
