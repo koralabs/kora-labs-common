@@ -23,7 +23,7 @@ export const getRarity = (name: string): Rarity => {
     return Rarity.basic;
 };
 
-const buildCharacters = (name: string): string => {
+export const buildCharacters = (name: string): string => {
     const characters: string[] = [];
 
     if (/[a-z]+/.test(name)) {
@@ -41,7 +41,7 @@ const buildCharacters = (name: string): string => {
     return characters.join(',');
 };
 
-const buildNumericModifiers = (name: string): string => {
+export const buildNumericModifiers = (name: string): string => {
     const modifiers: string[] = [];
 
     if (/^-?[0-9]\d*(\.\d+)?$/.test(name)) {
