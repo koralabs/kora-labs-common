@@ -267,6 +267,7 @@ export interface IPzDatumConvertedUsingSchema {
         public_mint: boolean;
     };
     original_address?: HexString;
+    id_hash?: HexString;
     agreed_terms: string;
     pz_enabled?: boolean;
     image_hash: HexStringOrEmpty; // sha256 checksum of custom handle jpeg
