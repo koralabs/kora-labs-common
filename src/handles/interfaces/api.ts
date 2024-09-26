@@ -1,5 +1,4 @@
 import { HandleType, IHandleMetadata, IPersonalization, IPersonalizedHandle, IPzDatumConvertedUsingSchema, IReferenceToken, ISubHandleSettings, IUTxO } from '.';
-import { HexString } from '../..';
 
 export interface SubHandleSettings {
     settings: ISubHandleSettings;
@@ -9,7 +8,7 @@ export interface SubHandleSettings {
 export interface StoredHandle extends IPersonalizedHandle {
     amount: number;
     default?: boolean;
-    id_hash?: HexString;
+    id_hash?: string;
     pz_enabled?: boolean;
     resolved_addresses: {
         ada: string;
@@ -35,7 +34,7 @@ export interface StoredHandle extends IPersonalizedHandle {
 export interface IDrep {
     type: 'drep' | 'cc_hot' | 'cc_cold',
     cred: 'key' | 'script',
-    hex: HexString,
+    hex: string,
     cip_105: string,
     cip_129: string
 }
@@ -93,7 +92,7 @@ export interface SaveMintingTxInput {
         public_mint: boolean;
     };
     original_address?: string;
-    id_hash?: HexString;
+    id_hash?: string;
     pz_enabled?: boolean;
     last_edited_time?: number
 }
