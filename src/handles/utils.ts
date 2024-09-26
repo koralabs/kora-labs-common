@@ -1,6 +1,6 @@
-import { HandleType, IHandleMetadata } from './interfaces';
+import { bech32FromHex, decodeAddress } from '../utils';
 import { REGEX_SUB_HANDLE, RESPONSE_AVAILABLE, RESPONSE_INVALID_HANDLE_FORMAT, RESPONSE_UNAVAILABLE_LEGENDARY } from './constants';
-import { Rarity } from './interfaces';
+import { HandleType, IHandleMetadata, Rarity } from './interfaces';
 
 export const getRarity = (name: string): Rarity => {
     const length = name.length;
@@ -119,3 +119,19 @@ export const checkHandlePattern = (handle: string, root?: string) => {
         message: RESPONSE_AVAILABLE
     };
 };
+
+export const buildDrep = (address: string, id_hash?: string): any => {
+    if (!id_hash) return undefined;
+    const decoded = decodeAddress(address)?.slice(1);
+    if (!decoded || !id_hash.startsWith(decoded)) return undefined;
+
+    const typeByte = id_hash.slice(16,1);
+    const typeByteDec = parseInt(typeByte, 16)
+    return {
+        type: (typeByteDec & 32) !== 0 ? 'drep' : (typeByteDec & 16) !== 0 ? 'cc_cold' : 'cc_hot',
+        cred: (typeByteDec & 1) !== 0 ? 'script' : 'key',
+        hex: decoded,
+        cip_105: bech32FromHex(decoded),
+        cip_129: bech32FromHex(typeByte + decoded)
+    }
+}

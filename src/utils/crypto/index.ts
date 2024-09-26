@@ -1,10 +1,10 @@
-import { IS_SERVER, IS_PRODUCTION, NETWORK } from '../../constants';
-import { AddressDetails, AddressType, AssetNameLabel, StakeAddressType } from '../../types';
-import { decodeCborToJson } from '../cbor';
-import { Logger} from '../../logger'
 import { bech32 } from 'bech32';
 import bs58 from 'bs58';
 import { crc8 } from 'crc';
+import { IS_PRODUCTION, IS_SERVER, NETWORK } from '../../constants';
+import { Logger } from '../../logger';
+import { AddressDetails, AddressType, AssetNameLabel, StakeAddressType } from '../../types';
+import { decodeCborToJson } from '../cbor';
 
 // var verifier = await getRandomCodeVerifier(64);
 // var challenge = await getChallengeFromVerifier(verifier);
@@ -190,8 +190,8 @@ export const getPaymentKeyHash = async (address: string): Promise<string | null>
     }
 };
 
-export const bech32FromHex = (hex: string, isTestnet = !IS_PRODUCTION, type: 'addr' | 'stake' | 'pool' | 'drep' = 'addr'): string => {
-    const prefix = isTestnet ? `${type}_test` : type;
+export const bech32FromHex = (hex: string, isTestnet = !IS_PRODUCTION, type: 'addr' | 'stake' | 'pool' | 'drep' | 'cc_hot' | 'cc_cold' = 'addr'): string => {
+    const prefix = isTestnet && (type == 'addr' || type == 'stake') ? `${type}_test` : type;
     const bytes = Uint8Array.from(Buffer.from(hex, 'hex'));
     const words = bech32.toWords(bytes);
     return bech32.encode(prefix, words, bytes.length * 2 + prefix.length);
