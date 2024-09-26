@@ -237,6 +237,7 @@ export interface IPzDatum {
     migrate_sig_required: BoolInt;
     original_address?: HexStringOrEmpty;
     pz_enabled?: BoolInt;
+    id_hash?: string;
 }
 
 /**

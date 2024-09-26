@@ -3,6 +3,7 @@ import { IS_PRODUCTION } from '../constants';
 import { bech32FromHex, decodeAddress } from '../utils';
 import { REGEX_SUB_HANDLE, RESPONSE_AVAILABLE, RESPONSE_INVALID_HANDLE_FORMAT, RESPONSE_UNAVAILABLE_LEGENDARY } from './constants';
 import { HandleType, IHandleMetadata, Rarity } from './interfaces';
+import { IDrep } from './interfaces/api';
 
 export const getRarity = (name: string): Rarity => {
     const length = name.length;
@@ -122,7 +123,7 @@ export const checkHandlePattern = (handle: string, root?: string) => {
     };
 };
 
-export const buildDrep = (address: string, id_hash?: string): any => {
+export const buildDrep = (address: string, id_hash?: string): IDrep | undefined => {
     if (!id_hash) return undefined;
     const decoded = decodeAddress(address)?.slice(2, 58);
     if (!decoded || decoded == '') return undefined;
