@@ -124,7 +124,8 @@ export const checkHandlePattern = (handle: string, root?: string) => {
 export const buildDrep = (address: string, id_hash?: string): any => {
     if (!id_hash) return undefined;
     const decoded = decodeAddress(address)?.slice(1);
-    const hashed = crypto.createHash('md5').update(Buffer.from(decoded!, 'hex')).digest('hex')
+    if (!decoded || decoded == '') return undefined;
+    const hashed = crypto.createHash('md5').update(Buffer.from(decoded, 'hex')).digest('hex')
     if (!id_hash.startsWith(hashed)) return undefined;
 
     const typeByte = id_hash.slice(16,1);
