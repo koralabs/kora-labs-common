@@ -10,6 +10,7 @@ export interface IHandlesRepository {
     getHandlesByPaymentKeyHashes: (hashes: string[]) => string[];
     getHandlesByAddresses: (addresses: string[]) => string[];
     getHandlesByHolderAddresses: (addresses: string[]) => string[];
+    getHandlesByStakeKeyHashes: (hashes: string[]) => string[];
     getAllHandleNames: (search: HandleSearchModel, sort: string) => Promise<string[]>;
     getHandleByName: (handleName: string) => Promise<StoredHandle | null>;
     getHandleByHex: (handleHex: string) => Promise<StoredHandle | null>;
