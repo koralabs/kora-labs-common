@@ -29,6 +29,15 @@ export interface StoredHandle extends IPersonalizedHandle {
         public_mint: boolean;
     };
     original_address?: string;
+    drep?: IDrep
+}
+
+export interface IDrep {
+    type: 'drep' | 'cc_hot' | 'cc_cold',
+    cred: 'key' | 'script',
+    hex: HexString,
+    cip_105: string,
+    cip_129: string
 }
 
 export interface HandleHistory {
