@@ -41,7 +41,8 @@ export enum AddressType {
     Enterprise = 'enterprise',
     Script = 'script',
     Reward = 'reward',
-    Other = 'other'
+    Other = 'other',
+    Drep = 'drep'
 }
 
 export enum StakeAddressType {

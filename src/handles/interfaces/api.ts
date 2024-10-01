@@ -1,4 +1,5 @@
 import { HandleType, IHandleMetadata, IPersonalization, IPersonalizedHandle, IPzDatumConvertedUsingSchema, IReferenceToken, ISubHandleSettings, IUTxO } from '.';
+import { Sort } from '../../types';
 
 export interface SubHandleSettings {
     settings: ISubHandleSettings;
@@ -138,4 +139,41 @@ export interface HolderAddressDetails {
     known_owner_name: string;
     default_handle: string;
     manually_set: boolean;
+}
+
+export interface IGetAllQueryParams {
+    records_per_page?: string;
+    page?: string;
+    sort?: Sort;
+    characters?: string;
+    length?: string;
+    rarity?: string;
+    numeric_modifiers?: string;
+    slot_number?: string;
+    search?: string;
+    holder_address?: string;
+    personalized?: boolean;
+    og?: 'true' | 'false';
+    handle_type?: string;
+    type: string;
+}
+
+export type ISearchBody = string[];
+
+export interface IGetAllHoldersQueryParams {
+    records_per_page?: string;
+    page?: string;
+    sort?: Sort;
+}
+
+export interface IGetHandleRequest {
+    handle: string;
+}
+
+export interface IGetHolderAddressDetailsRequest {
+    address: string;
+}
+
+export type INormalizedQueryParams = {
+    [key: string]: string;
 }

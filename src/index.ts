@@ -1,10 +1,11 @@
-export { Environment, ComputeEnvironment } from './environment';
-export { ProtectedWords } from './protectedWords';
-export { Logger, LogCategory } from './logger';
-export * from './utils';
+export * from './constants';
+export { ComputeEnvironment, Environment } from './environment';
+export * from './errors';
 export * from './handles';
 export * from './http';
-export * from './constants';
-export * from './types';
-export * from './errors';
+export { LogCategory, Logger } from './logger';
+export * from './marketplace';
+export { ProtectedWords } from './protectedWords';
 export * from './repositories';
+export * from './types';
+export * from './utils';
