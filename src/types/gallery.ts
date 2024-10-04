@@ -20,8 +20,9 @@ interface AssetFeaturedItem {
     type: 'asset';
     hex: string;
     fileIndex?: number;
+    link?: string;
 }
 
 type FeaturedItemType = PolicyFeaturedItem | SeparatorFeaturedItem | AssetFeaturedItem;
 
-export { PolicyFeaturedItem, SeparatorFeaturedItem, AssetFeaturedItem, FeaturedItemType };
+export { AssetFeaturedItem, FeaturedItemType, PolicyFeaturedItem, SeparatorFeaturedItem };
