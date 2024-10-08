@@ -95,8 +95,8 @@ export interface ScriptDetails {
 export interface IUTxO {
     tx_id: string;
     index: number;
-    lovelace: number;
-    datum: string;
+    lovelace: bigint;
+    datum?: string;
     address: string;
     script?: ScriptDetails;
 }
@@ -111,6 +111,7 @@ export interface IPersonalization {
     trial: boolean;
     nsfw: boolean;
 }
+
 export interface IHandle {
     hex: string;
     name: string;
