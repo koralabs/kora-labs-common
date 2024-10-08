@@ -68,8 +68,8 @@ export interface GallerySettings {
 export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
-    profile_header_setting?: string | null;
     custom_settings?: string[] | null;
+    profile_header_setting?: string | null;
     gallery_setting?: string | null;
     text_setting?: string | null;
 }
