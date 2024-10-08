@@ -75,7 +75,8 @@ export interface IPersonalizationPortal {
 
 export enum ScriptType {
     PZ_CONTRACT = 'pz_contract',
-    SUB_HANDLE_SETTINGS = 'sub_handle_settings'
+    SUB_HANDLE_SETTINGS = 'sub_handle_settings',
+    MARKETPLACE_CONTRACT = 'marketplace_contract'
 }
 
 export interface ScriptDetails {
