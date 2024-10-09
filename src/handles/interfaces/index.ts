@@ -69,6 +69,7 @@ export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
     custom_settings?: string[] | null;
+    profile_header_setting?: string | null;
     gallery_setting?: string | null;
     text_setting?: string | null;
 }
