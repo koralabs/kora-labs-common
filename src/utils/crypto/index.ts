@@ -1,4 +1,5 @@
 import { bech32 } from 'bech32';
+import { blake2bHex } from 'blakejs';
 import bs58 from 'bs58';
 import { crc8 } from 'crc';
 import { IS_PRODUCTION, IS_SERVER, NETWORK } from '../../constants';
@@ -271,3 +272,7 @@ export const getSlotNumberFromDate = (date: Date): number => {
     // prettier-ignore
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
 };
+
+export const blake2b = (input: string, outlen = 32) => {
+    return blake2bHex(input, undefined, outlen)
+}

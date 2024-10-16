@@ -15,6 +15,7 @@ export interface IMarketplaceListing {
     nftAttributes?: NftAttributes;
     utxo: IUTxO;
     holder: string;
-    price: bigint;
+    price: number;
+    payoutAddress: string;
     slotNumber: number
 }
