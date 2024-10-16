@@ -97,7 +97,7 @@ export interface ScriptDetails {
 export interface IUTxO {
     tx_id: string;
     index: number;
-    lovelace: bigint;
+    lovelace: number;
     datum?: string;
     address: string;
     script?: ScriptDetails;
