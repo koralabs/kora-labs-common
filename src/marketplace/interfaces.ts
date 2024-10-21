@@ -10,6 +10,7 @@ export type NftAttributes = {
 export interface IMarketplaceListing {
     assetName: string;
     assetNameHex: string;
+    image: string;
     assetLabel?: AssetNameLabel;
     policyId: string;
     nftAttributes?: NftAttributes;
