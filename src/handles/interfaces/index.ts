@@ -63,12 +63,14 @@ export interface GallerySettings {
     featured: FeaturedItemType[];
     sort: 'amount' | 'name';
     displayAmount: boolean;
+    handleLink: 'asset' | 'portal';
 }
 
 export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
     custom_settings?: string[] | null;
+    background_setting?: string | undefined | null;
     profile_header_setting?: string | null;
     gallery_setting?: string | null;
     text_setting?: string | null;
