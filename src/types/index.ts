@@ -1,4 +1,5 @@
 export * from './gallery';
+export * from './profile-header';
 
 export type BoolInt = 0 | 1;
 export type HexString = `0x${string}`;
