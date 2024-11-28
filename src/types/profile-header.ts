@@ -50,4 +50,6 @@ interface ProfileHeaderSetting {
     handleName?: ProfileHeaderHandleNameSetting;
 }
 
-export type { ProfileHeaderBannerImageTypes, ProfileHeaderBannerSetting, ProfileHeaderPFPImageTypes, ProfileHeaderPFPSetting, ProfileHeaderSetting };
+export { ProfileHeaderBannerImageTypes, ProfileHeaderPFPImageTypes };
+export type { ProfileHeaderBannerSetting, ProfileHeaderPFPSetting, ProfileHeaderSetting };
+
