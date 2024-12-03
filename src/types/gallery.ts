@@ -1,6 +1,6 @@
 // policy featured
-interface PolicyFeaturedItem {
-    type: 'policy';
+export interface PolicyFeaturedItem {
+    type: "policy";
     hex: string;
     name?: string;
     image?: string;
@@ -11,18 +11,16 @@ interface PolicyFeaturedItem {
 }
 
 // separator featured
-interface SeparatorFeaturedItem {
-    type: 'separator';
+export interface SeparatorFeaturedItem {
+    type: "separator";
 }
 
 // asset featured
-interface AssetFeaturedItem {
-    type: 'asset';
+export interface AssetFeaturedItem {
+    type: "asset";
     hex: string;
     fileIndex?: number;
     link?: string;
 }
 
-type FeaturedItemType = PolicyFeaturedItem | SeparatorFeaturedItem | AssetFeaturedItem;
-
-export { AssetFeaturedItem, FeaturedItemType, PolicyFeaturedItem, SeparatorFeaturedItem };
+export type FeaturedItemType = PolicyFeaturedItem | SeparatorFeaturedItem | AssetFeaturedItem;
