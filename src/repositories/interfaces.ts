@@ -9,7 +9,7 @@ export interface IOAuthRepo {
     getGrants(handle?: string | null): Promise<AuthGrant[]>;
     setGrant(grant?: AuthGrant): Promise<void>;
     getPermissions(): Promise<FriendlyPermissions>;
-    validateAccessToken(clientId: string, handle: string, accessToken: string): Promise<boolean>;
+    validateAccessToken(clientId: string, handle: string, accessToken: string, scopes: string[]): Promise<boolean>;
 }
 
 export interface AuthClient {
@@ -40,7 +40,7 @@ export interface AuthGrant {
     revokeReason?: string
 }
 
-export type Permission = 'subhandle.mint' | 'handles.login'
+export type Permission = 'subhandle.mint' | 'subhandle.mintmyown' | 'handles.login'
 
 export type FriendlyPermissions = Record<string, string>
 
