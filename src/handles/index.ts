@@ -1,7 +1,8 @@
 export * from './interfaces';
+export * from './interfaces/api';
+export * from './interfaces/handlesRepository'
 export * from './constants';
 export * from './api';
 export * from './policies';
-export { getRarity } from './getRarity';
-export { buildMetadata } from './buildMetadata';
-export { checkHandlePattern } from './validation';
+export * from './utils';
+export * from './models';

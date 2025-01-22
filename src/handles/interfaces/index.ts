@@ -1,4 +1,5 @@
-import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../types';
+import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
+import { ISlotHistoryIndex, StoredHandle } from './api';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -62,18 +63,23 @@ export interface GallerySettings {
     featured: FeaturedItemType[];
     sort: 'amount' | 'name';
     displayAmount: boolean;
+    handleLink: 'asset' | 'portal';
 }
 
 export interface IPersonalizationPortal {
     type: string;
     domain?: string | null;
     custom_settings?: string[] | null;
-    gallery_settings?: GallerySettings | null;
+    background_setting?: string | undefined | null;
+    profile_header_setting?: string | null;
+    gallery_setting?: string | null;
+    text_setting?: string | null;
 }
 
 export enum ScriptType {
     PZ_CONTRACT = 'pz_contract',
-    SUB_HANDLE_SETTINGS = 'sub_handle_settings'
+    SUB_HANDLE_SETTINGS = 'sub_handle_settings',
+    MARKETPLACE_CONTRACT = 'marketplace_contract'
 }
 
 export interface ScriptDetails {
@@ -94,7 +100,7 @@ export interface IUTxO {
     tx_id: string;
     index: number;
     lovelace: number;
-    datum: string;
+    datum?: string;
     address: string;
     script?: ScriptDetails;
 }
@@ -109,6 +115,7 @@ export interface IPersonalization {
     trial: boolean;
     nsfw: boolean;
 }
+
 export interface IHandle {
     hex: string;
     name: string;
@@ -133,6 +140,7 @@ export interface IHandle {
     };
     created_slot_number: number;
     updated_slot_number: number;
+    last_edited_time?: number;
     utxo: string;
     lovelace: number;
     has_datum: boolean;
@@ -219,6 +227,7 @@ export interface IPzDatum {
     pfp_image?: string; // ipfs://cid
     pfp_asset?: HexStringOrEmpty; // 0x<policy><assetName>
     bg_asset?: HexStringOrEmpty; // 0x<policy><assetName>
+    last_edited_time?: number; // timestamp in milliseconds
     portal?: string;
     designer?: string; // ipfs://cid containing IPersonalizationDesigner
     socials?: string;
@@ -233,6 +242,7 @@ export interface IPzDatum {
     migrate_sig_required: BoolInt;
     original_address?: HexStringOrEmpty;
     pz_enabled?: BoolInt;
+    id_hash?: string;
 }
 
 /**
@@ -249,6 +259,7 @@ export interface IPzDatumConvertedUsingSchema {
     socials?: string;
     vendor?: string;
     default: boolean;
+    last_edited_time?: number;
     resolved_addresses?: {
         ada: HexString;
         [key: string]: string;
@@ -262,6 +273,7 @@ export interface IPzDatumConvertedUsingSchema {
         public_mint: boolean;
     };
     original_address?: HexString;
+    id_hash?: HexString;
     agreed_terms: string;
     pz_enabled?: boolean;
     image_hash: HexStringOrEmpty; // sha256 checksum of custom handle jpeg
@@ -352,7 +364,8 @@ export interface IHandleFileContent {
     slot: number;
     hash: string;
     schemaVersion?: number;
-    handles: Record<string, IPersonalizedHandle>;
+    handles: Record<string, StoredHandle>;
+    history: [number, ISlotHistoryIndex][];
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {
@@ -370,8 +383,35 @@ export interface PzSettings {
     pz_providers: { [pubKeyHashBytes: HexString]: HexStringOrEmpty }; // { PubKeyHashBytes: ValidatorKeyHashBytes }
     valid_contracts: HexStringOrEmpty[]; // ValidatorKeyHashBytes[]
     admin_creds: HexStringOrEmpty[]; // PubKeyHashBytes[]
-    settings_cred: HexStringOrEmpty; // ValidatorKeyHashBytes
+    settings_cred: HexStringOrEmpty; // ValidatorKeyHashBytes,
+    grace_period: number; // seconds
+    subhandle_share_percent: number; // percentage
 }
+
+/**
+ *
+ * @property {number} [0] - treasury_fee
+ * @property {string} [1] - treasury_cred
+ * @property {number} [2] - pz_min_fee
+ * @property {[key: string]: string;} [3] - pz_providers
+ * @property {string[]} [4] - valid_contracts
+ * @property {string[]} [5] - admin_creds
+ * @property {string} [6] - settings_cred
+ * @property {number} [7] - grace_period
+ * @property {number} [8] - subhandle_share_percent
+ *
+ */
+export type IPzSettingsDatumStruct = [
+    number, // treasury_fee
+    string, // treasury_cred
+    number, // pz_min_fee
+    { [key: string]: string }, // pz_providers
+    string[], // valid_contracts
+    string[], // admin_creds
+    string, // settings_cred
+    number, // grace_period
+    number // subhandle_share_percent
+];
 
 export interface ApprovedPolicies {
     [policyId: HexString]: {

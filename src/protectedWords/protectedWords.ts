@@ -426,8 +426,8 @@ export const words: ProtectedWord[] = [
     },
     {
         word: 'bastard',
-        algorithms: ['badword'],
-        position: 'any'
+        algorithms: ['modifier'],
+        modType: ['hatespeech']
     },
     {
         word: 'batter',
@@ -917,7 +917,8 @@ export const words: ProtectedWord[] = [
     },
     {
         word: 'butt',
-        algorithms: ['badword', 'suggestive'],
+        algorithms: ['modifier', 'suggestive'],
+        modType: ['suggestive'],
         position: 'beginswith'
     },
     {
@@ -1033,7 +1034,8 @@ export const words: ProtectedWord[] = [
     {
         word: 'char',
         algorithms: ['modifier'],
-        modType: ['hatespeech']
+        modType: ['hatespeech'],
+        exceptions: ['charles', 'charlie']
     },
     {
         word: 'chatte',
@@ -1929,6 +1931,11 @@ export const words: ProtectedWord[] = [
     },
     {
         word: 'fag',
+        algorithms: ['badword', 'hatespeech'],
+        position: 'exact'
+    },
+    {
+        word: 'faggot',
         algorithms: ['badword', 'hatespeech'],
         position: 'exact'
     },
@@ -3253,7 +3260,8 @@ export const words: ProtectedWord[] = [
     {
         word: 'jam',
         algorithms: ['modifier'],
-        modType: ['suggestive']
+        modType: ['suggestive'],
+        exceptions: ['james', 'jamie', 'jameson']
     },
     {
         word: 'jamaica',
@@ -5408,7 +5416,8 @@ export const words: ProtectedWord[] = [
     },
     {
         word: 'poop',
-        algorithms: ['badword', 'suggestive'],
+        algorithms: ['modifier', 'suggestive'],
+        modType: ['suggestive'],
         position: 'beginswith'
     },
     {

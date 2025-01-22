@@ -1,4 +1,5 @@
 export * from './gallery';
+export * from './profile-header';
 
 export type BoolInt = 0 | 1;
 export type HexString = `0x${string}`;
@@ -32,3 +33,26 @@ export enum CardanoNetwork {
 }
 
 export type Network = 'preview' | 'preprod' | 'mainnet';
+
+export type Sort = 'asc' | 'desc';
+export type SortWithRandom = 'asc' | 'desc' | 'random';
+
+export enum AddressType {
+    Wallet = 'wallet',
+    Enterprise = 'enterprise',
+    Script = 'script',
+    Reward = 'reward',
+    Other = 'other',
+    Drep = 'drep'
+}
+
+export enum StakeAddressType {
+    Script = 'f',
+    Key = 'e'
+}
+
+export interface AddressDetails {
+    address: string;
+    type: string;
+    knownOwnerName: string;
+}

@@ -1,4 +1,4 @@
-import { CardanoNetwork } from "../types";
+import { CardanoNetwork } from '../types';
 
 export enum ComputeEnvironment {
     AWS_LAMBDA = 'aws_lambda',
