@@ -3,6 +3,7 @@ import { handleDatumSchema } from './schema/handleData';
 import { designerSchema } from './schema/designer';
 import { portalSchema } from './schema/portal';
 import { IPersonalizationDesigner } from '../../handles/interfaces';
+import { marketplaceDatum } from './schema/marketplaceDatum';
 
 describe('CBOR tests', () => {
     describe('Encode/decode Handle JSON and PlutusDataCbor', () => {
@@ -597,6 +598,36 @@ describe('CBOR tests', () => {
                     dupekey_str_b_1: 'jkl',
                     dupekey_str_c_0: 'mno'
                 }
+            };
+
+            expect(decoded).toEqual(expected);
+        });
+    });
+
+    describe('Decode/Encode Address', () => {
+        it('should decode an address', async () => {
+            const cbor = 'd8799f9fd8799fd8799fd8799f581ca9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49ffd8799fd8799fd8799f581ca36da2f9e93c05ddcb462f49e1bf181e933421db2ee259cdab70a960ffffffff1a05f5e100ffff581ca9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49ff';
+            const decoded = await decodeCborToJson({ cborString: cbor, schema: marketplaceDatum });
+
+            const expected = { constructor_0: [[{ constructor_0: ['0x00a9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49a36da2f9e93c05ddcb462f49e1bf181e933421db2ee259cdab70a960', 100000000] }], '0xa9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49'] };
+
+            expect(decoded).toEqual(expected);
+        });
+
+        it('should decode when a staking credential is not available', async () => {
+            const cbor = 'd8799f9fd8799fd8799fd8799f581cea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549aeffd8799fd8799fd8799f581cf43a7ed9e0f13525349911f0f6cdb58a1ce39d8f772856321582648cffffffff1a0aba9500ffd8799fd8799fd8799f581ca9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49ffd87a80ff1a01312d00ffff581cea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549aeff';
+            const decoded = await decodeCborToJson({ cborString: cbor, schema: marketplaceDatum });
+
+            const expected = { 
+                constructor_0: [
+                    [
+                        { 
+                            constructor_0: ['0x00ea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549aef43a7ed9e0f13525349911f0f6cdb58a1ce39d8f772856321582648c', 180000000] 
+                        }, { 
+                            constructor_0: ['0x60a9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49', 20000000] 
+                        }
+                    ], '0xea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549ae'
+                ] 
             };
 
             expect(decoded).toEqual(expected);
