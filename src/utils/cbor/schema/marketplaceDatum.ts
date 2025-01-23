@@ -1,4 +1,4 @@
-export const marketplaceDatum = {
+export const marketplaceDatumSchema = {
     constructor_0: {
         '[0]': {
             '[all]': {

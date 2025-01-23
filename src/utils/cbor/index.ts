@@ -3,6 +3,7 @@ import * as cbor from 'cbor';
 
 export { designerSchema } from './schema/designer';
 export { handleDatumSchema } from './schema/handleData';
+export { marketplaceDatumSchema } from './schema/marketplaceDatum';
 export { portalSchema } from './schema/portal';
 export { socialsSchema } from './schema/socials';
 
