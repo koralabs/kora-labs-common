@@ -7,16 +7,29 @@ export type NftAttributes = {
     [key: string]: string | number | boolean;
 }
 
+export interface IPayout {
+    address: string;
+    lovelace: number;
+}
+
 export interface IMarketplaceListing {
-    assetName: string;
-    assetNameHex: string;
+    asset_name: string;
+    asset_name_hex: string;
     image: string;
-    assetLabel?: AssetNameLabel;
-    policyId: string;
-    nftAttributes?: NftAttributes;
+    asset_label?: AssetNameLabel;
+    policy_id: string;
+    nft_attributes?: NftAttributes;
     utxo: IUTxO;
     holder: string;
     price: number;
-    payoutAddress: string;
-    slotNumber: number
+    payouts: IPayout[];
+    slot_number: number;
+}
+
+export interface PayoutStruct {
+    [constructor: string]: [string, number]; // [address, lovelace]
+}
+
+export interface MarketplaceListingDatumScript {
+    constructor_0: [PayoutStruct[], string]; // [payouts, ownerHash]
 }
