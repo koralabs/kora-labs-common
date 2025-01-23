@@ -626,7 +626,8 @@ describe('CBOR tests', () => {
                         }, { 
                             constructor_0: ['0x60a9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49', 20000000] 
                         }
-                    ], '0xea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549ae'
+                    ], 
+                    '0xea018bbdec1b9963f3cf37a7d7d80c0fd16d29722d0453fcfa9549ae'
                 ] 
             };
 

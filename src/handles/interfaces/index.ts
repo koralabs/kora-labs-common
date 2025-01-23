@@ -564,3 +564,11 @@ export type MintHandleSettings = [
     MintHandleSettingsAsset[], // assets
     MintHandleSettingsDetails
 ];
+
+export interface Payout {
+    [constructor: string]: [string, number]; // [address, lovelace]
+}
+
+export interface MarketplaceListingDatumScript {
+    constructor_0: [Payout[], string]; // [payouts, ownerHash]
+}
