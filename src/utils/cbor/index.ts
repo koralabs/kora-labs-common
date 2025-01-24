@@ -1,9 +1,9 @@
-import * as cbor from 'cbor';
 import { boolean, isBooleanable } from 'boolean';
+import * as cbor from 'cbor';
 
 export { designerSchema } from './schema/designer';
-export { subHandleSettingsDatumSchema } from './schema/subHandleSettings';
 export { handleDatumSchema } from './schema/handleData';
+export { marketplaceDatumSchema } from './schema/marketplaceDatum';
 export { portalSchema } from './schema/portal';
 export { socialsSchema } from './schema/socials';
 
@@ -180,7 +180,7 @@ export const encodeJsonToDatum = async (json: any, options?: EncodeOptions) => {
 };
 
 const parseSchema = (key: any, schema: any, defaultKeyType: DefaultTextFormat, i: number) => {
-    let schemaValue;
+    let schemaValueType;
 
     if (Number.isInteger(key)) {
         key = `${key}`;
@@ -213,28 +213,87 @@ const parseSchema = (key: any, schema: any, defaultKeyType: DefaultTextFormat, i
     }
 
     if (schemaKey) {
-        schemaValue = schema[schemaKey];
+        schemaValueType = schema[schemaKey];
     }
 
     return {
         mapKey,
-        schemaValue
+        schemaValueType
     };
 };
 
-const decodeObject = ({
-    val,
-    constr = null,
-    schema = {},
-    defaultKeyType = DefaultTextFormat.UTF8,
-    forJson = true
-}: {
-    val: any;
-    constr?: number | null;
-    schema?: any;
-    defaultKeyType?: DefaultTextFormat;
-    forJson?: boolean;
-}): any => {
+interface StakeCredential {
+    [stakeConstrKey: string]: string[];
+}
+
+interface Reference {
+    [referenceConstrKey: string]: [StakeCredential];
+}
+
+interface Option {
+    [optionConstrKey: string]: [Reference | undefined];
+}
+
+interface PaymentCredential {
+    [paymentConstrKey: string]: string[];
+}
+
+interface AddressDatum {
+    [networkConstrKey: string]: [PaymentCredential, Option | undefined];
+}
+
+const getAddressHexFromObject = (obj: AddressDatum) => {
+    // beginning of address is split networkConstrKey on _ and use index[1]
+    // address type is based on paymentConstrKey and stakeConstrKey
+    let addressType;
+
+    const networkConstrKey = Object.keys(obj)[0];
+    const network = networkConstrKey.split('_')[1];
+    const [paymentCredential, option] = obj[networkConstrKey];
+    const paymentCredentialKey = Object.keys(paymentCredential)[0]; // 0 or 1
+    const paymentHashType = paymentCredentialKey.split('_')[1];
+    const paymentHash = Buffer.from(paymentCredential[paymentCredentialKey][0]).toString('hex');
+
+    let stakeHashType;
+    let stakeHash = '';
+    if (option) {
+        const [, [reference]] = Object.entries(option)[0];
+        if (reference) {
+            const referenceKey = Object.keys(reference)[0];
+            const stakeCredentialKey = Object.keys(reference[referenceKey][0])[0];
+            stakeHash = Buffer.from(reference[referenceKey][0][stakeCredentialKey][0]).toString('hex');
+            stakeHashType = stakeCredentialKey.split('_')[1];            
+        }
+    }
+
+    if (paymentHashType === '0' && stakeHashType === '0') {
+        addressType = '0';
+    }
+
+    if (paymentHashType === '1' && stakeHashType === '0') {
+        addressType = '1';
+    }
+
+    if (paymentHashType === '0' && stakeHashType === '1') {
+        addressType = '2';
+    }
+
+    if (paymentHashType === '1' && stakeHashType === '1') {
+        addressType = '3';
+    }
+
+    if (paymentHashType === '0' && !stakeHashType) {
+        addressType = '6'
+    }
+
+    if (paymentHashType === '1' && !stakeHashType) {
+        addressType = '7'
+    }
+
+    return `0x${addressType}${network}${paymentHash}${stakeHash}`;
+};
+
+const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = DefaultTextFormat.UTF8, forJson = true }: { val: any; constr?: number | null; schema?: any; defaultKeyType?: DefaultTextFormat; forJson?: boolean }): any => {
     const isMap = val instanceof Map;
     if (isMap) {
         const obj = new Map();
@@ -244,7 +303,7 @@ const decodeObject = ({
             const key = keys[i];
             const value = val.get(key);
 
-            const { mapKey, schemaValue } = parseSchema(key, schema, defaultKeyType, i);
+            const { mapKey, schemaValueType } = parseSchema(key, schema, defaultKeyType, i);
 
             if (obj.get(mapKey)) {
                 dupeKeys = true;
@@ -264,9 +323,9 @@ const decodeObject = ({
                 const prevValue = obj.get(mapKey);
                 obj.delete(mapKey);
                 obj.set(oldKey, prevValue);
-                obj.set(newKey, decodeObject({ val: value, constr, schema: schemaValue, defaultKeyType, forJson }));
+                obj.set(newKey, decodeObject({ val: value, constr, schema: schemaValueType, defaultKeyType, forJson }));
             } else {
-                obj.set(mapKey, decodeObject({ val: value, constr, schema: schemaValue, defaultKeyType, forJson }));
+                obj.set(mapKey, decodeObject({ val: value, constr, schema: schemaValueType, defaultKeyType, forJson }));
             }
         }
 
@@ -305,9 +364,9 @@ const decodeObject = ({
             const key = keys[i];
             const value = val[key];
 
-            const { mapKey, schemaValue } = parseSchema(key, schema, defaultKeyType, i);
+            const { mapKey, schemaValueType } = parseSchema(key, schema, defaultKeyType, i);
 
-            obj[mapKey] = decodeObject({ val: value, schema: schemaValue, defaultKeyType, forJson });
+            obj[mapKey] = decodeObject({ val: value, schema: schemaValueType, defaultKeyType, forJson });
         }
         if (constr != null) {
             return { [`constructor_${constr}`]: obj };
@@ -339,7 +398,12 @@ const decodeObject = ({
                 schemaValue = schema[schemaKey];
             }
 
-            arr.push(decodeObject({ val: arrayVal, schema: schemaValue, defaultKeyType, forJson }));
+            if (schemaValue === 'Address') {
+                const addressHex = getAddressHexFromObject(arrayVal);
+                arr.push(addressHex);
+            } else {
+                arr.push(decodeObject({ val: arrayVal, schema: schemaValue, defaultKeyType, forJson }));
+            }
         }
         if (constr != null) {
             return { [`constructor_${constr}`]: arr };

@@ -92,3 +92,16 @@ describe('addresses tests', () => {
         });
     });
 });
+
+// TODO: Add test for verifySignature
+// describe.skip('verifySignature tests', () => { 
+//     it('should verify a signature', async () => {
+//         const stakeAddress = 'stake_test1upe8ja86xc3s9l20k6q2fcjvma4kffnxjxwkfcl67pntp9sknxq9q';
+//         const result = await verifySignature(stakeAddress, stakeAddress, {
+//             'signature': '84582aa201276761646472657373581de0727974fa362302fd4fb680a4e24cdf6b64a666919d64e3faf066b096a166686173686564f4581de0727974fa362302fd4fb680a4e24cdf6b64a666919d64e3faf066b096584005c8a1d4e7f2aafa0ebc7c7c495ea54de78723cf40848698a528b73c41adf68328438b1ee1270257b7e915b9667a3c9d8402bad9da781a5ade12a6a30576a006',
+//             'key': 'a4010103272006215820dc00b6d666549509afa7bf87f8df5add868f7751ed0530af2681b166c52f22b1'
+//         });
+
+//         expect(result).toBeTruthy();
+//     });
+// });
