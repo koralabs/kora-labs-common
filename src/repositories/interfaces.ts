@@ -46,8 +46,9 @@ export interface MerchOrder {
     workflow_status: any,
     order_status?: any,
     terms_accepted: any,
-    created_at: any
-    order_id?: any
+    created_at: any,
+    ADA_price: any,
+    order_id?: any,
 }
 
 export type Permission = 'subhandle.mint' | 'subhandle.mintmyown' | 'handles.login'
