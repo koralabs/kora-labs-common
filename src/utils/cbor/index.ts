@@ -6,6 +6,7 @@ export { handleDatumSchema } from './schema/handleData';
 export { marketplaceDatumSchema } from './schema/marketplaceDatum';
 export { portalSchema } from './schema/portal';
 export { socialsSchema } from './schema/socials';
+export { subHandleSettingsDatumSchema } from './schema/subHandleSettings';
 
 // The five ways to represent metadata/datum:
 // Json (cardano-cli can take this with --tx-out-datum-json-value)
