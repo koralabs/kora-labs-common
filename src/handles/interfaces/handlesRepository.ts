@@ -1,4 +1,4 @@
-import { IHandleStats, IUTxO } from '..';
+import { IHandleFileContent, IHandleStats, IUTxO } from '..';
 import { HandlePaginationModel } from '../models/handlePagination.model';
 import { HandleSearchModel } from '../models/handleSearch.model';
 import { HolderPaginationModel } from '../models/holderPagination.model';
@@ -25,7 +25,8 @@ export interface IHandlesRepository {
     getTimeMetrics: () => { elapsedOgmiosExec: number; elapsedBuildingExec: number };
     setMetrics: (metrics: IHandleStoreMetrics) => void;
     getMetrics: () => IHandleStats;
-    prepareHandlesStorage: (loadS3: boolean) => Promise<{ slot: number; hash: string } | null>;
+    getFilesContent(): Promise<IHandleFileContent[] | null>
+    prepareHandlesStorage: (fileContent: IHandleFileContent) => Promise<void>;
     rollBackToGenesis: () => Promise<void>;
     isCaughtUp: () => boolean;
     burnHandle: (handleName: string, slotNumber: number) => Promise<void>;
