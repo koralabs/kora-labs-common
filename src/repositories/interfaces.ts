@@ -40,6 +40,18 @@ export interface AuthGrant {
     revokeReason?: string
 }
 
+export interface MerchOrder {
+    tx_id: string,
+    holder_address: string,
+    workflow_status: string,
+    order_status?: string,
+    terms_accepted: boolean,
+    created_at: number,
+    ada_market_value: string,
+    lovelace_cost: string,
+    order_id?: number,
+}
+
 export type Permission = 'subhandle.mint' | 'subhandle.mintmyown' | 'handles.login'
 
 export type FriendlyPermissions = Record<string, string>
