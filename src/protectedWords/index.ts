@@ -1,24 +1,18 @@
 import pluralize from 'pluralize-esm';
-import { words } from './protectedWords';
-import { delay } from '../utils';
-import { AvailabilityResponse, AvailabilityResponseCode, ReservedOrProtected } from '../handles/interfaces';
 import { REGEX_SPLIT_ON_CHARS, REGEX_SPLIT_ON_NUMS } from '../handles/constants';
+import { AvailabilityResponse, AvailabilityResponseCode, ReservedOrProtected } from '../handles/interfaces';
+import { delay } from '../utils';
+import { words } from './protectedWords';
 
-declare global {
-    interface String {
-        includesSingularOrPlural(word: string): boolean;
-        replaceSingularOrPlural(word: string, replacement: string): string;
-    }
-}
 
-String.prototype.includesSingularOrPlural = function (word: string): boolean {
+const includesSingularOrPlural = (handle: string, word: string): boolean => {
     const singPlur = ProtectedWords.setSingular(word);
-    return this.includes(singPlur.singular) || this.includes(singPlur.plural);
+    return handle.includes(singPlur.singular) || handle.includes(singPlur.plural);
 };
 
-String.prototype.replaceSingularOrPlural = function (word: string, replacement: string): string {
+const replaceSingularOrPlural = (handle: string, word: string, replacement: string): string => {
     const singPlur = ProtectedWords.setSingular(word);
-    return this.replace(singPlur.singular, replacement).replace(singPlur.plural, replacement);
+    return handle.replace(singPlur.singular, replacement).replace(singPlur.plural, replacement);
 };
 
 export class ProtectedWords {
@@ -127,7 +121,7 @@ export class ProtectedWords {
                     return (
                         entry.position == 'any' &&
                         !entry.exceptions?.some((exc) => h.includes(exc)) &&
-                        h.includesSingularOrPlural(entry.word)
+                        includesSingularOrPlural(h, entry.word)
                     );
                 })
             ) {
@@ -142,7 +136,7 @@ export class ProtectedWords {
                     return (
                         entry.position == 'beginswith' &&
                         h.startsWith(entry.word) &&
-                        !'aeiou'.includes(h.replaceSingularOrPlural(entry.word, '')?.charAt(0)) &&
+                        !'aeiou'.includes(replaceSingularOrPlural(h, entry.word, '')?.charAt(0)) &&
                         !entry.exceptions?.some((exc) => h.includes(exc))
                     );
                 })
@@ -170,13 +164,13 @@ export class ProtectedWords {
             if (
                 hatespeechEntries.some((entry) => {
                     return (
-                        h.includesSingularOrPlural(entry.word) &&
+                        includesSingularOrPlural(h, entry.word) &&
                         // It's a hatespeech target and includes a hatespeech modifier (check exceptions)
                         !entry.exceptions?.some((exc) => h.includes(exc)) &&
                         hatespeechWords.some((hateWord) => {
                             foundWords = `${entry.word},${hateWord.word}`;
                             return (
-                                h.replaceSingularOrPlural(entry.word, ' ').includes(hateWord.word) &&
+                                replaceSingularOrPlural(h, entry.word, ' ').includes(hateWord.word) &&
                                 !hateWord.exceptions?.some((exc) => h.includes(exc)) &&
                                 // If it's a vulnerable target, a positive word is fine
                                 !(entry.algorithms.includes('vulnerable') && hateWord.canBePositive) &&
@@ -224,13 +218,13 @@ export class ProtectedWords {
                 [...suggestiveEntries, ...vulnerableEntries].some((entry) => {
                     // is combined with a suggestive word, or another suggestive entry (from the same badwords list), or it's a modifier + `pp`
                     return (
-                        h.includesSingularOrPlural(entry.word) &&
+                        includesSingularOrPlural(h, entry.word) &&
                         !entry.exceptions?.some((exc) => h.includes(exc)) &&
                         (suggestiveWords.some((s) => {
                             // is combined with a suggestive word (check exceptions)
                             foundWords = `${entry.word},${s.word}`;
                             return (
-                                h.replaceSingularOrPlural(entry.word, ' ').includes(s.word) &&
+                                replaceSingularOrPlural(h, entry.word, ' ').includes(s.word) &&
                                 !s.exceptions?.some((exc) => h.includes(exc)) &&
                                 !(entry.algorithms.includes('vulnerable') && s.canBePositive)
                             );
@@ -240,13 +234,13 @@ export class ProtectedWords {
                                 foundWords = `${entry.word},${s.word}`;
                                 return (
                                     s != entry &&
-                                    h.replaceSingularOrPlural(entry.word, ' ').includesSingularOrPlural(s.word) &&
+                                    replaceSingularOrPlural(h, entry.word, ' ') && includesSingularOrPlural(h, s.word) &&
                                     !s.exceptions?.some((exc) => h.includes(exc))
                                 );
                             }) ||
                             modifiers.some(
                                 (mod) =>
-                                    h.replaceSingularOrPlural(entry.word, ' ').includes(mod.word) &&
+                                    replaceSingularOrPlural(h, entry.word, ' ').includes(mod.word) &&
                                     // If it can be a positive modifier, like "love", then vulnerable targets are OK
                                     !(
                                         entry.algorithms.includes('vulnerable') &&
@@ -254,19 +248,17 @@ export class ProtectedWords {
                                         !specialCaseVulnWords.some((spec) => {
                                             // it's a modifier + `pp` - This is a hint that it's not a good phrase like "tinypreteenpp"
                                             foundWords = `${entry.word},${mod.word},${spec}`;
-                                            return h
-                                                .replaceSingularOrPlural(entry.word, ' ')
-                                                .replaceSingularOrPlural(mod.word, ' ')
-                                                .includes(spec);
+                                            return replaceSingularOrPlural(h, entry.word, ' ') &&
+                                                replaceSingularOrPlural(h, mod.word, ' ') &&
+                                                h.includes(spec);
                                         })
                                     ) &&
                                     specialCaseVulnWords.some((spec) => {
                                         // it's a modifier + `pp` - This is a hint that it's not a good phrase like "tinypreteenpp"
                                         foundWords = `${entry.word},${mod.word},${spec}`;
-                                        return h
-                                            .replaceSingularOrPlural(entry.word, ' ')
-                                            .replaceSingularOrPlural(mod.word, ' ')
-                                            .includes(spec);
+                                        return replaceSingularOrPlural(h, entry.word, ' ') &&
+                                            replaceSingularOrPlural(h, mod.word, ' ') &&
+                                            h.includes(spec);
                                     })
                             ))
                     );
@@ -388,7 +380,7 @@ export class ProtectedWords {
                             // if over 3 chars, check anywhere in the word
                             (m.word.length > 3 &&
                                 handle.includes(entry.word) &&
-                                handle.replaceSingularOrPlural(entry.word, ' ').includes(m.word)))
+                                replaceSingularOrPlural(handle, entry.word, ' ').includes(m.word)))
                     );
                 })
             )
