@@ -2,9 +2,13 @@ import { IApiMetrics, IndexNames, StoredHandle } from './api';
 
 export interface IHandlesProvider {
     // SETUP
-    initialize: () => IHandlesProvider;
+    initialize: () => Promise<IHandlesProvider>;
     destroy: () => void;
     rollBackToGenesis: () => void;
+    getStartingPoint: (
+        save: ({ handle, oldHandle, saveHistory }: { handle: StoredHandle; oldHandle?: StoredHandle; saveHistory?: boolean }) => Promise<void>, 
+        failed: boolean
+    ) => Promise<{ slot: number; id: string; } | null>
     
     //HANDLES
     getHandle: (key: string) => StoredHandle | null;
