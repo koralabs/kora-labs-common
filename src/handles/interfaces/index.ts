@@ -83,8 +83,7 @@ export enum ScriptType {
     DEMI_MINT = 'demi_mint',
     DEMI_MINT_PROXY = 'demi_mint_proxy',
     DEMI_MINTING_DATA = 'demi_minting_data',
-    DEMI_MINTING_DATA_PROXY = 'demi_minting_data_proxy',
-    DEMI_ORDERS = 'demi_orders',
+    DEMI_ORDERS = 'demi_orders'
 }
 
 export interface ScriptDetails {
