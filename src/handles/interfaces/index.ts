@@ -1,5 +1,5 @@
 import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
-import { ISlotHistoryIndex, StoredHandle } from './api';
+import { ISlotHistory, StoredHandle } from './api';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -79,7 +79,11 @@ export interface IPersonalizationPortal {
 export enum ScriptType {
     PZ_CONTRACT = 'pz_contract',
     SUB_HANDLE_SETTINGS = 'sub_handle_settings',
-    MARKETPLACE_CONTRACT = 'marketplace_contract'
+    MARKETPLACE_CONTRACT = 'marketplace_contract',
+    DEMI_MINT = 'demi_mint',
+    DEMI_MINT_PROXY = 'demi_mint_proxy',
+    DEMI_MINTING_DATA = 'demi_minting_data',
+    DEMI_ORDERS = 'demi_orders'
 }
 
 export interface ScriptDetails {
@@ -170,7 +174,7 @@ export interface IPersonalizedHandle extends ICip68Handle {
     personalization?: IPersonalization;
 }
 
-export interface IHandleStats {
+export interface IApiMetricsViewModel {
     percentage_complete: string;
     current_memory_used: number;
     ogmios_elapsed: string;
@@ -365,7 +369,7 @@ export interface IHandleFileContent {
     hash: string;
     schemaVersion?: number;
     handles: Record<string, StoredHandle>;
-    history: [number, ISlotHistoryIndex][];
+    history: [number, ISlotHistory][];
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {
