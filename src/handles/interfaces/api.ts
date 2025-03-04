@@ -106,7 +106,7 @@ export interface SaveWalletAddressMoveInput {
     name: string;
     adaAddress: string;
     utxo: string;
-    lovelace: number,
+    lovelace: number;
     policy: string;
     datum?: string;
     script?: { type: string; cbor: string };
