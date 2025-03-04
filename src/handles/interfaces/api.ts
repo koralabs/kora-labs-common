@@ -98,6 +98,7 @@ export interface SaveMintingTxInput {
     id_hash?: string;
     pz_enabled?: boolean;
     last_edited_time?: number
+    policy: string;
 }
 
 export interface SaveWalletAddressMoveInput {
@@ -105,6 +106,8 @@ export interface SaveWalletAddressMoveInput {
     name: string;
     adaAddress: string;
     utxo: string;
+    lovelace: number,
+    policy: string;
     datum?: string;
     script?: { type: string; cbor: string };
 }
