@@ -23,3 +23,5 @@ export enum ERROR_TEXT {
 }
 
 export const HANDLES_PER_PAGE_MAX = 1000;
+export const EMPTY = '|empty|';
+export const TWELVE_HOURS_IN_SLOTS = 43200; // value comes from the securityParam here: https://cips.cardano.org/cips/cip9/#nonupdatableparameters then converted to slots

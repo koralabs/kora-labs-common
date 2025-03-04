@@ -45,11 +45,11 @@ export interface HandleHistory {
     new?: Partial<StoredHandle> | null;
 }
 
-export interface ISlotHistoryIndex {
+export interface ISlotHistory {
     [handleHex: string]: HandleHistory;
 }
 
-export interface IHandleStoreMetrics {
+export interface IApiMetrics {
     firstSlot?: number;
     lastSlot?: number;
     currentSlot?: number;
@@ -60,6 +60,8 @@ export interface IHandleStoreMetrics {
     tipBlockHash?: string;
     memorySize?: number;
     networkSync?: number;
+    count?: number;
+    schemaVersion?: number;
 }
 
 export interface SaveMintingTxInput {
@@ -127,7 +129,8 @@ export interface SaveSubHandleSettingsInput {
     slotNumber: number;
 }
 
-export interface HolderAddressIndex {
+export interface Holder {
+    address: string;
     handles: Set<string>;
     defaultHandle: string;
     manuallySet: boolean;
@@ -135,7 +138,7 @@ export interface HolderAddressIndex {
     knownOwnerName: string;
 }
 
-export interface HolderAddressDetails {
+export interface HolderViewModel {
     total_handles: number;
     address: string;
     type: string;
@@ -179,4 +182,20 @@ export interface IGetHolderAddressDetailsRequest {
 
 export type INormalizedQueryParams = {
     [key: string]: string;
+}
+
+export enum IndexNames {
+    ADDRESS = 'address',
+    CHARACTER = 'characters',
+    HANDLE = 'handle',
+    HASH_OF_STAKE_KEY_HASH = 'hashofstakekeyhash',
+    HOLDER = 'holder',
+    LENGTH = 'length',
+    NUMERIC_MODIFIER = 'numericmodifiers',
+    OG = 'og',
+    PAYMENT_KEY_HASH = 'paymentkeyhashes',
+    RARITY = 'rarity',
+    SLOT_HISTORY = 'slothistory',
+    SUBHANDLE = 'subhandle',
+    STAKE_KEY_HASH = 'stakekeyhash',
 }
