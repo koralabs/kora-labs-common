@@ -1,4 +1,4 @@
-import { IApiMetrics, IndexNames, StoredHandle } from './api';
+import { Holder, IApiMetrics, IndexNames, ISlotHistory, StoredHandle } from './api';
 
 export interface IHandlesProvider {
     // SETUP
@@ -10,7 +10,7 @@ export interface IHandlesProvider {
         failed: boolean
     ) => Promise<{ slot: number; id: string; } | null>
     
-    //HANDLES
+    // HANDLES
     getHandle: (key: string) => StoredHandle | null;
     getHandleByHex: (hex: string) => StoredHandle | null;
     getAllHandles: () => StoredHandle[];
@@ -18,11 +18,15 @@ export interface IHandlesProvider {
     removeHandle: (handleName: string) => void;
 
     // INDEXES
-    getIndex: (index:IndexNames) => any;
-    getValuesFromIndex: (index:IndexNames, key: string|number) => any;
-    setValueOnIndex: (index:IndexNames, key: string|number, value: any) => void;
-    removeValueFromIndex: (index:IndexNames, key: string|number, value: string) => void;
+    getIndex: (index:IndexNames) => Map<string|number, Set<string> | Holder | ISlotHistory | StoredHandle>;
+    getValueFromIndex: (index:IndexNames, key:string|number) => Set<string> | Holder | ISlotHistory | StoredHandle | undefined;
+    setValueOnIndex: (index:IndexNames, key: string|number, value: Set<string> | Holder | ISlotHistory | StoredHandle) => void;
     removeKeyFromIndex: (index:IndexNames, key: string|number) => void;
+
+    // SET INDEXES
+    getValuesFromIndexedSet: (index:IndexNames, key: string|number) => Set<string> | undefined;
+    addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
+    removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
         
     // METRICS
     getMetrics: () => IApiMetrics;

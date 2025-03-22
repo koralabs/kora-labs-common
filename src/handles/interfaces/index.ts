@@ -156,7 +156,7 @@ export interface IHandle {
     last_update_address?: string;
     svg_version: string;
     version: number;
-    policy?: string;
+    policy: string;
     handle_type: HandleType;
     virtual?: {
         expires_time: number;

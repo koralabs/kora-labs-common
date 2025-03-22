@@ -1084,6 +1084,17 @@
     "@jridgewell/resolve-uri" "3.1.0"
     "@jridgewell/sourcemap-codec" "1.4.14"
 
+"@koralabs/kora-labs-common@file:lib":
+  version "4.5.0"
+  resolved "file:lib"
+  dependencies:
+    bech32 "^2.0.0"
+    boolean "^3.2.0"
+    bs58 "^6.0.0"
+    cbor "^9.0.2"
+    crc "^4.3.2"
+    pluralize-esm "^9.0.5"
+
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
   resolved "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz"
