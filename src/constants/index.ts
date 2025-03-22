@@ -1,6 +1,7 @@
 import { mintedOgList } from './mintedOgList';
 
 export const IS_SERVER = typeof process !== 'undefined' && typeof process.versions.node !== 'undefined';
+export const IS_LOCAL = IS_SERVER ? process.env.IS_LOCAL === 'true' : window.location.host.includes('localhost');
 export const NETWORK = process.env.NETWORK?.toLowerCase() ?? 'preview';
 export const IS_PRODUCTION = IS_SERVER
     ? process.env.NODE_ENV?.trim() === 'production' && NETWORK == 'mainnet'

@@ -117,6 +117,7 @@ export interface SavePersonalizationInput {
     hex: string;
     name: string;
     personalization: IPersonalization;
+    policy: string;
     reference_token: IReferenceToken;
     personalizationDatum: IPzDatumConvertedUsingSchema | null;
     metadata: IHandleMetadata | null;

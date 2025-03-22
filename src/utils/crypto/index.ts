@@ -198,6 +198,17 @@ export const bech32FromHex = (hex: string, isTestnet = !IS_PRODUCTION, type: 'ad
     return bech32.encode(prefix, words, bytes.length * 2 + prefix.length);
 };
 
+export const bech32AddressFromHashes = (paymentHash: string, paymentHashType: 'key' | 'script' = 'key', stakeHash = '', stakeHashType: 'key' | 'script' = 'key', type: 'addr' | 'stake' = 'addr', isTestnet = !IS_PRODUCTION): string => {
+    let headerByte = 0;
+    if (!stakeHash) {headerByte += 6}
+    else {
+        if (stakeHashType == 'script') {headerByte += 2}
+    }
+    if (paymentHashType == 'script') {headerByte += 1}
+    const hex = `${headerByte.toString(16)}${isTestnet ? 0 : 1}${paymentHash}${stakeHash}`;
+    return bech32FromHex(hex, isTestnet, type);
+};
+
 export const getAddressHolderDetails = (addr: string): AddressDetails => {
     const addressType = buildPaymentAddressType(addr);
     let knownOwnerName = checkKnownSmartContracts(addr);
@@ -273,6 +284,6 @@ export const getSlotNumberFromDate = (date: Date): number => {
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
 };
 
-export const blake2b = (input: string, outlen = 32) => {
-    return blake2bHex(input, undefined, outlen)
+export const blake2b = (input: string | Buffer | Uint8Array, outlen = 32) => {
+    return blake2bHex(typeof input == 'string' ? Buffer.from(input, 'hex') : input, undefined, outlen)
 }
