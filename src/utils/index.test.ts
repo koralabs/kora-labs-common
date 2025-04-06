@@ -48,19 +48,19 @@ describe('Utils Tests', () => {
     describe('checkNameLabel', () => {
         it('should return the correct label for asset names', () => {
             const assetName222 = `${AssetNameLabel.LBL_222}${Buffer.from('burrito').toString('hex')}`;
-            expect(checkNameLabel(assetName222)).toEqual({ assetLabel: '222', assetName: 'burrito', isCip67: true });
+            expect(checkNameLabel(assetName222)).toEqual({ assetLabel: AssetNameLabel.LBL_222, name: 'burrito', isCip67: true });
 
             const assetName000 = `${AssetNameLabel.LBL_000}${Buffer.from('burrito').toString('hex')}`;
-            expect(checkNameLabel(assetName000)).toEqual({ assetLabel: '000', assetName: 'burrito', isCip67: true });
+            expect(checkNameLabel(assetName000)).toEqual({ assetLabel: AssetNameLabel.LBL_000, name: 'burrito', isCip67: true });
 
             const assetName001 = `${AssetNameLabel.LBL_001}${Buffer.from('burrito').toString('hex')}`;
-            expect(checkNameLabel(assetName001)).toEqual({ assetLabel: '001', assetName: 'burrito', isCip67: true });
+            expect(checkNameLabel(assetName001)).toEqual({ assetLabel: AssetNameLabel.LBL_001, name: 'burrito', isCip67: true });
         });
 
         it('should return the correct label for 222', () => {
             const assetName = `${Buffer.from('burrito').toString('hex')}`;
             const label = checkNameLabel(assetName);
-            expect(label).toEqual({ assetLabel: null, assetName: 'burrito', isCip67: false });
+            expect(label).toEqual({ assetLabel: AssetNameLabel.NONE, name: 'burrito', isCip67: false });
         });
     });
 

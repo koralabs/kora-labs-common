@@ -64,20 +64,16 @@ export const decodeAddress = (address: string): string | null => {
     }
 };
 
-export const parseAssetNameLabel = (assetName: string): AssetNameLabel | null => {
-    for(const lbl in AssetNameLabel) {
-        if (assetName.startsWith(AssetNameLabel[lbl as keyof typeof AssetNameLabel])) {
-            return lbl as AssetNameLabel;
-        }
-    }
-    return null;
+export const parseAssetNameLabel = (assetName: string): AssetNameLabel => {
+    const maybeAssetNameLabel = assetName.slice(0, 8);
+    return Object.values(AssetNameLabel).includes(maybeAssetNameLabel as AssetNameLabel) ? maybeAssetNameLabel as AssetNameLabel : AssetNameLabel.NONE
 }
 
-export const checkNameLabel = (assetName: string) => {
+export const checkNameLabel = (assetName: string): { isCip67: boolean, assetLabel: AssetNameLabel, name: string } => {
     const assetNameString = typeof assetName === 'string' ? assetName : new TextDecoder().decode(assetName);
     let isCip67 = false;
-    let assetLabel = null;
-    let actualAssetName = Buffer.from(assetName, 'hex').toString('utf8');
+    let assetLabel = AssetNameLabel.NONE;
+    let utf8Name = Buffer.from(assetName, 'hex').toString('utf8');
     if (assetNameString.length >= 8) {
         const maybeAssetLabel = assetNameString.slice(0, 8);
         if (maybeAssetLabel.startsWith('0') && maybeAssetLabel.endsWith('0')) {
@@ -85,15 +81,15 @@ export const checkNameLabel = (assetName: string) => {
             const check = maybeAssetLabel.slice(5, 7);
             if (crc8(Buffer.from(label, 'hex')).toString(16).padStart(2, '0') == check) {
                 isCip67 = true;
-                assetLabel = `${parseInt(label, 16).toString().padStart(3, '0')}`;
-                actualAssetName = Buffer.from(assetName.slice(8), 'hex').toString('utf8');
+                assetLabel = parseAssetNameLabel(assetName);
+                utf8Name = Buffer.from(assetName.slice(8), 'hex').toString('utf8');
             }
         }
     }
     return {
         isCip67,
         assetLabel,
-        assetName: actualAssetName
+        name: utf8Name
     };
 };
 
@@ -209,7 +205,7 @@ export const bech32AddressFromHashes = (paymentHash: string, paymentHashType: 'k
     return bech32FromHex(hex, isTestnet, type);
 };
 
-export const getAddressHolderDetails = (addr: string): AddressDetails => {
+export const buildHolderInfo = (addr: string): AddressDetails => {
     const addressType = buildPaymentAddressType(addr);
     let knownOwnerName = checkKnownSmartContracts(addr);
     let stakeKey = null;

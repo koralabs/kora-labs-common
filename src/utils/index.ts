@@ -87,6 +87,8 @@ export const isDate = (d: any) => d instanceof Date;
 export const isEmptyObject = (o: any) => isObject(o) && objectHasKeys(o);
 export const makeObjectWithoutPrototype = () => Object.create(null);
 
+export const ExcludesFalse = <T>(n?: T | undefined | null): n is T => Boolean(n);
+
 export const diff = (lhs: any, rhs: any) => {
     if (lhs === rhs) return {}; // equal return no diff
 
@@ -126,6 +128,6 @@ export const diff = (lhs: any, rhs: any) => {
     }, deletedValues);
 };
 
-export { DefaultTextFormat as KeyType, encodeJsonToDatum, decodeCborToJson } from './cbor';
+export { decodeCborToJson, encodeJsonToDatum, DefaultTextFormat as KeyType } from './cbor';
 
 export * from './crypto';
