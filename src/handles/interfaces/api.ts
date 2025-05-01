@@ -1,8 +1,7 @@
 import { IPersonalizedHandle, ISubHandleSettings, IUTxO } from '.';
 import { Sort } from '../../types';
 
-export interface SubHandleSettings {
-    settings: ISubHandleSettings;
+export interface SubHandleSettings extends ISubHandleSettings {
     utxo: IUTxO;
 }
 
@@ -16,10 +15,7 @@ export interface StoredHandle extends IPersonalizedHandle {
         [key: string]: string;
     };
     payment_key_hash: string;
-    subhandle_settings?: {
-        settings?: string;
-        utxo: IUTxO;
-    };
+    subhandle_settings?: SubHandleSettings;
     sub_rarity?: string;
     sub_length?: number;
     sub_characters?: string;
@@ -81,21 +77,29 @@ export interface HolderViewModel {
     manually_set: boolean;
 }
 
-export interface IGetAllQueryParams {
-    records_per_page?: string;
-    page?: string;
-    sort?: Sort;
+export interface IHandleSearchParams {
     characters?: string;
     length?: string;
     rarity?: string;
     numeric_modifiers?: string;
-    slot_number?: string;
     search?: string;
     holder_address?: string;
     personalized?: boolean;
-    og?: 'true' | 'false';
     handle_type?: string;
-    type: string;
+    public_subhandles?: boolean;
+    og?: 'true' | 'false';
+}
+
+export interface IHandleSearchInput extends IHandleSearchParams {
+    handles?: string[];
+}
+
+export interface IGetAllQueryParams extends IHandleSearchParams {
+    records_per_page?: string;
+    page?: string;
+    sort?: Sort;
+    slot_number?: string;
+    type?: 'bech32stake' | 'holder' | 'stakekeyhash' | 'assetname' | 'handlehex' | 'paymentkeyhash' | 'bech32address' | 'hexaddress' 
 }
 
 export type ISearchBody = string[];

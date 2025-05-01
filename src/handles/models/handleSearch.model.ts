@@ -1,21 +1,8 @@
-import { HandleType, Rarity } from '..';
+import { HandleType, IHandleSearchInput, Rarity } from '..';
 import { ModelException } from '../../errors';
 import { isNumeric } from '../../utils';
 
-interface HandleSearchInput {
-    characters?: string;
-    length?: string;
-    rarity?: string;
-    numeric_modifiers?: string;
-    search?: string;
-    holder_address?: string;
-    personalized?: boolean;
-    handle_type?: string;
-    og?: string;
-    handles?: string[];
-}
-
-export class HandleSearchModel {
+export class HandleSearchModel implements IHandleSearchInput {
     private _characters?: string;
     private _length?: string;
     private _rarity?: string;
@@ -24,21 +11,16 @@ export class HandleSearchModel {
     private _holder_address?: string;
     private _personalized?: boolean;
     private _handle_type?: string;
-    private _og?: boolean;
+    private _og?: 'true' | 'false';
     private _handles?: string[];
+    private _public_subhandles?: boolean;
 
-    constructor(input?: HandleSearchInput) {
-        const { characters, length, rarity, numeric_modifiers, search, holder_address, og, personalized, handle_type, handles } = input ?? {};
-        this.characters = characters;
-        this.length = length;
-        this.rarity = rarity;
-        this.numeric_modifiers = numeric_modifiers;
-        this.search = search;
-        this.holder_address = holder_address;
-        this.personalized = personalized;
-        this.handle_type = handle_type;
-        this.og = og === 'true';
-        this.handles = handles;
+    constructor(input?: IHandleSearchInput) {
+        for (const key in input) {
+            if (input.hasOwnProperty(key) && this.hasOwnProperty(key)) {
+                (this as any)[key] = (input as any)[key];
+            }
+        }
     }
 
     get characters() {
@@ -154,6 +136,14 @@ export class HandleSearchModel {
 
     set og(value) {
         this._og = value;
+    }
+
+    get public_subhandles() {
+        return this._public_subhandles;
+    }
+
+    set public_subhandles(value) {
+        this._public_subhandles = value;
     }
 
     get handles() {
