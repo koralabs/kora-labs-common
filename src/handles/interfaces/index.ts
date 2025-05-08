@@ -1,5 +1,5 @@
 import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
-import { ISlotHistoryIndex, StoredHandle } from './api';
+import { ISlotHistory, StoredHandle } from './api';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -156,7 +156,7 @@ export interface IHandle {
     last_update_address?: string;
     svg_version: string;
     version: number;
-    policy?: string;
+    policy: string;
     handle_type: HandleType;
     virtual?: {
         expires_time: number;
@@ -174,7 +174,7 @@ export interface IPersonalizedHandle extends ICip68Handle {
     personalization?: IPersonalization;
 }
 
-export interface IHandleStats {
+export interface IApiMetricsViewModel {
     percentage_complete: string;
     current_memory_used: number;
     ogmios_elapsed: string;
@@ -369,7 +369,7 @@ export interface IHandleFileContent {
     hash: string;
     schemaVersion?: number;
     handles: Record<string, StoredHandle>;
-    history: [number, ISlotHistoryIndex][];
+    history: [number, ISlotHistory][];
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {

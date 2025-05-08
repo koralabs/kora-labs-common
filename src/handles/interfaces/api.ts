@@ -1,8 +1,7 @@
-import { HandleType, IHandleMetadata, IPersonalization, IPersonalizedHandle, IPzDatumConvertedUsingSchema, IReferenceToken, ISubHandleSettings, IUTxO } from '.';
+import { IPersonalizedHandle, ISubHandleSettings, IUTxO } from '.';
 import { Sort } from '../../types';
 
-export interface SubHandleSettings {
-    settings: ISubHandleSettings;
+export interface SubHandleSettings extends ISubHandleSettings {
     utxo: IUTxO;
 }
 
@@ -16,10 +15,7 @@ export interface StoredHandle extends IPersonalizedHandle {
         [key: string]: string;
     };
     payment_key_hash: string;
-    subhandle_settings?: {
-        settings?: string;
-        utxo: IUTxO;
-    };
+    subhandle_settings?: SubHandleSettings;
     sub_rarity?: string;
     sub_length?: number;
     sub_characters?: string;
@@ -45,11 +41,11 @@ export interface HandleHistory {
     new?: Partial<StoredHandle> | null;
 }
 
-export interface ISlotHistoryIndex {
+export interface ISlotHistory {
     [handleHex: string]: HandleHistory;
 }
 
-export interface IHandleStoreMetrics {
+export interface IApiMetrics {
     firstSlot?: number;
     lastSlot?: number;
     currentSlot?: number;
@@ -60,75 +56,11 @@ export interface IHandleStoreMetrics {
     tipBlockHash?: string;
     memorySize?: number;
     networkSync?: number;
+    count?: number;
+    schemaVersion?: number;
 }
 
-export interface SaveMintingTxInput {
-    hex: string;
-    name: string;
-    adaAddress: string;
-    og_number: number;
-    image: string;
-    image_hash?: string;
-    slotNumber: number;
-    utxo: string;
-    lovelace: number;
-    svg_version?: string;
-    bg_image?: string;
-    pfp_image?: string;
-    datum?: string;
-    script?: { type: string; cbor: string };
-    last_update_address?: string;
-    personalization?: IPersonalization;
-    reference_token?: IReferenceToken;
-    resolved_addresses?: Record<string, string>;
-    amount?: number;
-    version?: number;
-    handle_type: HandleType;
-    sub_rarity?: string;
-    sub_length?: number;
-    sub_characters?: string;
-    sub_numeric_modifiers?: string;
-    virtual?: {
-        expires_time: number;
-        public_mint: boolean;
-    };
-    original_address?: string;
-    id_hash?: string;
-    pz_enabled?: boolean;
-    last_edited_time?: number;
-    policy: string;
-}
-
-export interface SaveWalletAddressMoveInput {
-    slotNumber: number;
-    name: string;
-    adaAddress: string;
-    utxo: string;
-    lovelace: number;
-    policy: string;
-    datum?: string;
-    script?: { type: string; cbor: string };
-}
-
-export interface SavePersonalizationInput {
-    slotNumber: number;
-    hex: string;
-    name: string;
-    personalization: IPersonalization;
-    policy: string;
-    reference_token: IReferenceToken;
-    personalizationDatum: IPzDatumConvertedUsingSchema | null;
-    metadata: IHandleMetadata | null;
-}
-
-export interface SaveSubHandleSettingsInput {
-    name: string;
-    settingsDatum?: string;
-    utxoDetails: IUTxO;
-    slotNumber: number;
-}
-
-export interface HolderAddressIndex {
+export interface Holder {
     handles: Set<string>;
     defaultHandle: string;
     manuallySet: boolean;
@@ -136,7 +68,7 @@ export interface HolderAddressIndex {
     knownOwnerName: string;
 }
 
-export interface HolderAddressDetails {
+export interface HolderViewModel {
     total_handles: number;
     address: string;
     type: string;
@@ -145,21 +77,29 @@ export interface HolderAddressDetails {
     manually_set: boolean;
 }
 
-export interface IGetAllQueryParams {
-    records_per_page?: string;
-    page?: string;
-    sort?: Sort;
+export interface IHandleSearchParams {
     characters?: string;
     length?: string;
     rarity?: string;
     numeric_modifiers?: string;
-    slot_number?: string;
     search?: string;
     holder_address?: string;
     personalized?: boolean;
-    og?: 'true' | 'false';
     handle_type?: string;
-    type: string;
+    public_subhandles?: boolean;
+    og?: 'true' | 'false';
+}
+
+export interface IHandleSearchInput extends IHandleSearchParams {
+    handles?: string[];
+}
+
+export interface IGetAllQueryParams extends IHandleSearchParams {
+    records_per_page?: string;
+    page?: string;
+    sort?: Sort;
+    slot_number?: string;
+    type?: 'bech32stake' | 'holder' | 'stakekeyhash' | 'assetname' | 'handlehex' | 'paymentkeyhash' | 'bech32address' | 'hexaddress' 
 }
 
 export type ISearchBody = string[];
@@ -180,4 +120,20 @@ export interface IGetHolderAddressDetailsRequest {
 
 export type INormalizedQueryParams = {
     [key: string]: string;
+}
+
+export enum IndexNames {
+    ADDRESS = 'address',
+    CHARACTER = 'characters',
+    HANDLE = 'handle',
+    HASH_OF_STAKE_KEY_HASH = 'hashofstakekeyhash',
+    HOLDER = 'holder',
+    LENGTH = 'length',
+    NUMERIC_MODIFIER = 'numericmodifiers',
+    OG = 'og',
+    PAYMENT_KEY_HASH = 'paymentkeyhashes',
+    RARITY = 'rarity',
+    SLOT_HISTORY = 'slothistory',
+    SUBHANDLE = 'subhandle',
+    STAKE_KEY_HASH = 'stakekeyhash',
 }

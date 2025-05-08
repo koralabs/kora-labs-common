@@ -1,4 +1,4 @@
-import { buildStakeKey, buildPaymentAddressType, bech32FromHex, getPaymentKeyHash, getAddressHolderDetails } from '.';
+import { bech32FromHex, buildHolderInfo, buildPaymentAddressType, buildStakeKey, getPaymentKeyHash } from '.';
 import { AddressType } from '../../types';
 
 const addresses = ['addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x', 'addr1z8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gten0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs9yc0hh', 'addr1yx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerkr0vd4msrxnuwnccdxlhdjar77j6lg0wypcc9uar5d2shs2z78ve', 'addr1x8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gt7r0vd4msrxnuwnccdxlhdjar77j6lg0wypcc9uar5d2shskhj42g', 'addr1gx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer5pnz75xxcrzqf96k', 'addr128phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtupnz75xxcrtw79hu', 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8', 'addr1w8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtcyjy7wx', 'stake1uyehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gh6ffgw', 'stake178phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtcccycj5'];
@@ -67,13 +67,13 @@ describe('Serialization Test', () => {
 });
 
 describe('addresses tests', () => {
-    describe('getAddressHolderDetails', () => {
+    describe('buildHolderInfo', () => {
         it('should get the address holder details', async () => {
             const stakeAddress = 'stake1u8g3pqp52xuel3csupu679l4ul54uh4c2pqemefqhwdwlksjhtqld';
 
             const address =
                 'addr1q8p0ru6eqplg6ljpm23uydwt3dy8ezzfcqs76s7w64nyxkw3zzqrg5denlr3pcre4utltelfte0ts5zpnhjjpwu6aldqgv4fdd';
-            const result = await getAddressHolderDetails(address);
+            const result = buildHolderInfo(address);
             expect(result).toEqual({
                 address: stakeAddress,
                 knownOwnerName: '',
@@ -83,7 +83,7 @@ describe('addresses tests', () => {
 
         it('should get the address holder details for jpg.store', async () => {
             const address = 'addr1w999n67e86jn6xal07pzxtrmqynspgx0fwmcmpua4wc6yzsxpljz3';
-            const result = await getAddressHolderDetails(address);
+            const result = buildHolderInfo(address);
             expect(result).toEqual({
                 address,
                 knownOwnerName: 'jpg.store',

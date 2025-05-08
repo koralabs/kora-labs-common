@@ -413,7 +413,7 @@ const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = Defaul
         }
     } else if (Buffer.isBuffer(val)) {
         if (schema === 'string' || schema === 'bool') {
-            const result = Buffer.from(val).toString('utf8');
+            const result = val.toString('utf8');
             if (schema === 'bool' && isBooleanable(result)) {
                 return boolean(result);
             }
@@ -426,7 +426,7 @@ const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = Defaul
             return result;
         }
 
-        return `0x${Buffer.from(val).toString('hex')}`;
+        return `0x${val.toString('hex')}`;
     } else {
         if (schema === 'bool' && isBooleanable(val)) {
             return boolean(val);
@@ -452,7 +452,8 @@ export const decodeCborToJson = async ({
             121: (val: any) => ({ [`constructor_0`]: val }),
             122: (val: any) => ({ [`constructor_1`]: val }),
             123: (val: any) => ({ [`constructor_2`]: val }),
-            124: (val: any) => ({ [`constructor_3`]: val })
+            124: (val: any) => ({ [`constructor_3`]: val }),
+            125: (val: any) => ({ [`constructor_3`]: val })
         }
     });
 

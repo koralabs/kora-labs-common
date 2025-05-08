@@ -1,5 +1,5 @@
-import { CardanoNetwork } from '../types';
 import { Environment } from '../environment';
+import { CardanoNetwork } from '../types';
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
 if (!('toJSON' in Error.prototype))
     Object.defineProperty(Error.prototype, 'toJSON', {
@@ -85,9 +85,22 @@ export class Logger {
         const log_count = count != undefined && count != null ? `, "count": ${count}` : '';
         const log_dimensions =
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
-
+        let logFunc = console.log;
+        switch (category) {
+            case LogCategory.DEBUG:
+                logFunc = console.debug;
+                break;
+            case LogCategory.WARN:
+                logFunc = console.warn;
+                break;
+            case LogCategory.ERROR:
+            case LogCategory.FATAL:
+            case LogCategory.NOTIFY:
+                logFunc = console.error;
+                break;
+        }
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
-        console.log(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${ category ?? LogCategory.INFO }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
+        logFunc(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${ category ?? LogCategory.INFO }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
     }
 }
