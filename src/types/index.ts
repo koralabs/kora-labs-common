@@ -17,6 +17,7 @@ export interface KeyPair {
  * Finally, use the decimal number and convert to CRC8. It should match the last 2 characters. https://crccalc.com/
  */
 export enum AssetNameLabel {
+    NONE = '',
     LBL_000 = '00000000',
     LBL_001 = '00001070',
     LBL_002 = '000020e0',
