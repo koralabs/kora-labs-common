@@ -3,157 +3,71 @@ import { ModelException } from '../../errors';
 import { isNumeric } from '../../utils';
 
 export class HandleSearchModel implements IHandleSearchInput {
-    private _characters?: string;
-    private _length?: string;
-    private _rarity?: string;
-    private _numeric_modifiers?: string;
-    private _search?: string;
-    private _holder_address?: string;
-    private _personalized?: boolean;
-    private _handle_type?: string;
-    private _og?: 'true' | 'false';
-    private _handles?: string[];
-    private _public_subhandles?: boolean;
+    public characters?: string;
+    public length?: string;
+    public rarity?: string;
+    public numeric_modifiers?: string;
+    public search?: string;
+    public holder_address?: string;
+    public personalized?: boolean;
+    public handle_type?: string;
+    public public_subhandles?: boolean;
+    public og?: 'true' | 'false';
+    public handles?: string[];
 
     constructor(input?: IHandleSearchInput) {
         for (const key in input) {
-            if (input.hasOwnProperty(key) && this.hasOwnProperty(key)) {
-                (this as any)[key] = (input as any)[key];
-            }
+            (this as any)[key] = (input as any)[key];
         }
-    }
-
-    get characters() {
-        return this._characters;
-    }
-
-    set characters(value) {
+        
         const validCharacters = ['letters', 'numbers', 'special'];
-        if (value && !validCharacters.some((v) => value.split(',').includes(v))) {
+        if (this.characters && !validCharacters.some((v) => this.characters!.split(',').includes(v))) {
             throw new ModelException(`characters must be ${validCharacters.join(', ')}`);
         }
-
-        this._characters = value;
-    }
-
-    get rarity() {
-        return this._rarity;
-    }
-
-    set rarity(value) {
+        
         const validRarity = Object.values(Rarity);
-        if (value && !validRarity.some((v) => value.split(',').includes(v))) {
+        if (this.rarity && !validRarity.some((v) => this.rarity!.split(',').includes(v))) {
             throw new ModelException(`rarity must be ${validRarity.join(', ')}`);
         }
-        this._rarity = value;
-    }
-
-    get handle_type() {
-        return this._handle_type;
-    }
-
-    set handle_type(value) {
+        
         const validHandleType = Object.values(HandleType);
-        if (value && !validHandleType.some((v) => value.split(',').includes(v))) {
+        if (this.handle_type && !validHandleType.some((v) => this.handle_type!.split(',').includes(v))) {
             throw new ModelException(`handle_type must be ${validHandleType.join(', ')}`);
         }
-        this._handle_type = value;
-    }
 
-    get length() {
-        return this._length;
-    }
-
-    set length(value) {
-        const lengthMErrorMsg = "Length must be a number or a range of numbers (ex: 1-28) and can't exceed 28";
-        if (!value) {
-            this._length = value;
-            return;
-        }
-        let minLength = value;
-        let maxLength = value;
-        if (value?.includes('-')) {
-            minLength = value.split('-')[0];
-            maxLength = value.split('-')[1];
-        }
-        if (!isNumeric(minLength) || !isNumeric(maxLength)) {
-            throw new ModelException(lengthMErrorMsg);
-        }
-
-        if (parseInt(minLength) > 28 || parseInt(maxLength) > 28) {
-            throw new ModelException(lengthMErrorMsg);
+        if (this.length)
+        {
+            const lengthMErrorMsg = "Length must be a number or a range of numbers (ex: 1-28) and can't exceed 28";
+            let minLength = this.length;
+            let maxLength = this.length;
+            if (this.length?.includes('-')) {
+                minLength = this.length.split('-')[0];
+                maxLength = this.length.split('-')[1];
+            }
+            if (!isNumeric(minLength) || !isNumeric(maxLength)) {
+                throw new ModelException(lengthMErrorMsg);
+            }
+    
+            if (parseInt(minLength) > 28 || parseInt(maxLength) > 28) {
+                throw new ModelException(lengthMErrorMsg);
+            }
+    
+            if (parseInt(minLength) > parseInt(maxLength)) {
+                throw new ModelException('Invalid length range');
+            }
         }
 
-        if (parseInt(minLength) > parseInt(maxLength)) {
-            throw new ModelException('Invalid length range');
-        }
-        this._length = value;
-    }
-
-    get numeric_modifiers() {
-        return this._numeric_modifiers;
-    }
-
-    set numeric_modifiers(value) {
         const validModifiers = ['negative', 'decimal'];
-        if (value && !validModifiers.some((v) => value.split(',').includes(v))) {
+        if (this.numeric_modifiers && !validModifiers.some((v) => this.numeric_modifiers!.split(',').includes(v))) {
             throw new ModelException(`numeric_modifiers must be ${validModifiers.join(', ')}`);
         }
-
-        this._numeric_modifiers = value;
-    }
-
-    get search() {
-        return this._search;
-    }
-
-    set search(value) {
-        if (value && value.length < 3) {
+        if (this.search && this.search!.length < 3) {
             throw new ModelException('search must be at least 3 characters');
         }
-        this._search = value;
-    }
-
-    get holder_address() {
-        return this._holder_address;
-    }
-
-    set holder_address(value) {
-        this._holder_address = value;
-    }
-
-    get personalized() {
-        return this._personalized;
-    }
-
-    set personalized(value) {
-        this._personalized = value;
-    }
-
-    get og() {
-        return this._og;
-    }
-
-    set og(value) {
-        this._og = value;
-    }
-
-    get public_subhandles() {
-        return this._public_subhandles;
-    }
-
-    set public_subhandles(value) {
-        this._public_subhandles = value;
-    }
-
-    get handles() {
-        return this._handles;
-    }
-
-    set handles(value) {
-        if (value && !Array.isArray(value)) {
-            throw new ModelException(`expected array and received ${typeof value}`);
+        if (this.handles && !Array.isArray(this.handles)) {
+            throw new ModelException(`expected array and received ${typeof this.handles}`);
         }
-        this._handles = value;
+
+
     }
 }

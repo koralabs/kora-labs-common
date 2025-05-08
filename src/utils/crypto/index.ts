@@ -281,5 +281,12 @@ export const getSlotNumberFromDate = (date: Date): number => {
 };
 
 export const blake2b = (input: string | Buffer | Uint8Array, outlen = 32) => {
-    return blake2bHex(typeof input == 'string' ? Buffer.from(input, 'hex') : input, undefined, outlen)
+    if (typeof input == 'string') {
+        input = Buffer.from(input, 'hex');
+    }
+    if (input instanceof Buffer) {
+        input = new Uint8Array(input);
+    }
+    
+    return blake2bHex(input, undefined, outlen)
 }

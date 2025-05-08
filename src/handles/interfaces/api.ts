@@ -60,8 +60,13 @@ export interface IApiMetrics {
     schemaVersion?: number;
 }
 
+export interface DefaultHandleInfo {
+    name: string;
+    og_number: number;
+    created_slot_number: number;
+}
 export interface Holder {
-    handles: Set<string>;
+    handles: DefaultHandleInfo[];
     defaultHandle: string;
     manuallySet: boolean;
     type: string;
@@ -134,6 +139,5 @@ export enum IndexNames {
     PAYMENT_KEY_HASH = 'paymentkeyhashes',
     RARITY = 'rarity',
     SLOT_HISTORY = 'slothistory',
-    SUBHANDLE = 'subhandle',
-    STAKE_KEY_HASH = 'stakekeyhash',
+    SUBHANDLE = 'subhandle'
 }
