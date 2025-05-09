@@ -6,7 +6,7 @@ export interface IHandlesProvider {
     destroy: () => void;
     rollBackToGenesis: () => void;
     getStartingPoint: (
-        save: (handle: StoredHandle) => Promise<void>, 
+        save: (handle: StoredHandle) => void, 
         failed: boolean
     ) => Promise<{ slot: number; id: string; } | null>
     

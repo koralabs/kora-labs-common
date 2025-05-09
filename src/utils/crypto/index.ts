@@ -163,14 +163,14 @@ export const buildStakeKey = (address: string): string | null => {
     }
 };
 
-export const getPaymentKeyHash = async (address: string): Promise<string | null> => {
+export const getPaymentKeyHash = (address: string): string | null => {
     try {
         const decoded = decodeAddress(address);
         if (!decoded) {
             try {
                 // Try Byron addresses
-                const jsonAddress = await decodeCborToJson({cborString: Buffer.from(bs58.decode(address)).toString('hex')});
-                const innerAddress = await decodeCborToJson({cborString: (jsonAddress[0].value as Buffer).toString('hex')});
+                const jsonAddress = decodeCborToJson({cborString: Buffer.from(bs58.decode(address)).toString('hex')});
+                const innerAddress = decodeCborToJson({cborString: (jsonAddress[0].value as Buffer).toString('hex')});
                 return (innerAddress[0] as Buffer).toString('hex').slice(2);
             }
             catch {

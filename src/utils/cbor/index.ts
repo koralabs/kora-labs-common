@@ -436,7 +436,7 @@ const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = Defaul
     }
 };
 
-export const decodeCborToJson = async ({
+export const decodeCborToJson = ({
     cborString,
     schema,
     defaultKeyType,
@@ -447,13 +447,13 @@ export const decodeCborToJson = async ({
     defaultKeyType?: DefaultTextFormat;
     forJson?: boolean;
 }) => {
-    const decoded = await cbor.decodeAll(Buffer.from(cborString, 'hex'), {
+    const decoded = cbor.decodeAllSync(Buffer.from(cborString, 'hex'), {
         tags: {
             121: (val: any) => ({ [`constructor_0`]: val }),
             122: (val: any) => ({ [`constructor_1`]: val }),
             123: (val: any) => ({ [`constructor_2`]: val }),
             124: (val: any) => ({ [`constructor_3`]: val }),
-            125: (val: any) => ({ [`constructor_3`]: val })
+            125: (val: any) => ({ [`constructor_4`]: val })
         }
     });
 
