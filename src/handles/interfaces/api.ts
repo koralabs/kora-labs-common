@@ -104,6 +104,7 @@ export interface IGetAllQueryParams extends IHandleSearchParams {
     page?: string;
     sort?: Sort;
     slot_number?: string;
+    minting_type?: 'nft' | 'virtual'
     type?: 'bech32stake' | 'holder' | 'stakekeyhash' | 'assetname' | 'handlehex' | 'paymentkeyhash' | 'bech32address' | 'hexaddress' 
 }
 

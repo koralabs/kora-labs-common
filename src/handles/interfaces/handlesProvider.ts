@@ -19,6 +19,7 @@ export interface IHandlesProvider {
 
     // INDEXES
     getIndex: (index:IndexNames) => Map<string|number, Set<string> | Holder | ISlotHistory | StoredHandle>;
+    getKeysFromIndex: (index:IndexNames) => (string|number)[];
     getValueFromIndex: (index:IndexNames, key:string|number) => Set<string> | Holder | ISlotHistory | StoredHandle | undefined;
     setValueOnIndex: (index:IndexNames, key: string|number, value: Set<string> | Holder | ISlotHistory | StoredHandle) => void;
     removeKeyFromIndex: (index:IndexNames, key: string|number) => void;

@@ -11,7 +11,6 @@ export class HandleSearchModel implements IHandleSearchInput {
     public holder_address?: string;
     public personalized?: boolean;
     public handle_type?: string;
-    public public_subhandles?: boolean;
     public og?: 'true' | 'false';
     public handles?: string[];
 
