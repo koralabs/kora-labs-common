@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.1.5",
+    "version": "6.1.6",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -30,7 +30,7 @@
         "@aws-sdk/client-dynamodb": "^3.549.0",
         "@aws-sdk/lib-dynamodb": "^3.549.0",
         "@types/jest": "^28.1.1",
-        "@types/node": "^18.11.17",
+        "@types/node": "^22.15.17",
         "@types/pluralize": "^0.0.29",
         "@typescript-eslint/eslint-plugin": "^7.6.0",
         "@typescript-eslint/parser": "^7.6.0",
