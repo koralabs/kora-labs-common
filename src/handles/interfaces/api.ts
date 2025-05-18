@@ -1,9 +1,41 @@
 import { IPersonalizedHandle, ISubHandleSettings, IUTxO } from '.';
+import { IMarketplaceListing } from '../../marketplace/interfaces';
 import { Sort } from '../../types';
+
+export interface IApiStore {
+    // SETUP
+    initialize: () => Promise<IApiStore>;
+    destroy: () => void;
+    rollBackToGenesis: () => void;
+    getStartingPoint: (
+        save: (handle: StoredHandle) => void, 
+        failed: boolean
+    ) => Promise<{ slot: number; id: string; } | null>
+
+    // INDEXES
+    getIndex: (index:IndexNames) => Map<string|number, ApiIndexType>;
+    getKeysFromIndex: (index:IndexNames) => (string|number)[];
+    getValueFromIndex: (index:IndexNames, key:string|number) => ApiIndexType | undefined;
+    setValueOnIndex: (index:IndexNames, key: string|number, value: ApiIndexType) => void;
+    removeKeyFromIndex: (index:IndexNames, key: string|number) => void;
+
+    // SET INDEXES
+    getValuesFromIndexedSet: (index:IndexNames, key: string|number) => Set<string> | undefined;
+    addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
+    removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
+        
+    // METRICS
+    getMetrics: () => IApiMetrics;
+    setMetrics: (metrics: IApiMetrics) => void;
+    count: () => number;
+    getSchemaVersion: () => number;
+}
 
 export interface SubHandleSettings extends ISubHandleSettings {
     utxo: IUTxO;
 }
+
+export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing;
 
 export interface StoredHandle extends IPersonalizedHandle {
     amount: number;
@@ -41,8 +73,13 @@ export interface HandleHistory {
     new?: Partial<StoredHandle> | null;
 }
 
+export interface ListingHistory {
+    old: Partial<IMarketplaceListing> | null;
+    new?: Partial<IMarketplaceListing> | null;
+}
+
 export interface ISlotHistory {
-    [handleHex: string]: HandleHistory;
+    [handleHex: string]: HandleHistory | ListingHistory;
 }
 
 export interface IApiMetrics {
@@ -135,6 +172,7 @@ export enum IndexNames {
     HASH_OF_STAKE_KEY_HASH = 'hashofstakekeyhash',
     HOLDER = 'holder',
     LENGTH = 'length',
+    LISTINGS = 'listings',
     NUMERIC_MODIFIER = 'numericmodifiers',
     OG = 'og',
     PAYMENT_KEY_HASH = 'paymentkeyhashes',
