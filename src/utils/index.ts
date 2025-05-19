@@ -130,10 +130,14 @@ export const diff = (lhs: any, rhs: any) => {
 
 export const mapStringifyReplacer = (_key: any, value: any) => {
     if (value instanceof Map) {
-        return {
-            dataType: 'Map',
-            value: Array.from(value.entries())
-        };
+        return Array.from(value.entries());
+    } else {
+        return value;
+    }
+}
+export const mapNoKeysStringifyReplacer = (_key: any, value: any) => {
+    if (value instanceof Map) {
+        return Array.from(value.values());
     } else {
         return value;
     }
