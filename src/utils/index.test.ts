@@ -6,16 +6,16 @@ describe('Utils Tests', () => {
         it('should return the correct date for the current slot on mainnet', () => {
             const currentSlot = 127856308;
             const result = getDateFromSlot(currentSlot);
-            expect(new Date(result).toDateString()).toEqual('Wed Jun 26 2024');
+            expect(new Date(result).toUTCString()).toContain('Wed, 26 Jun 2024');
         });
 
         it('should return the correct date for preview', () => {
             const currentSlot = 52766835;
             const result = getDateFromSlot(currentSlot, 'preview');
-            expect(new Date(result).toDateString()).toEqual('Wed Jun 26 2024');
+            expect(new Date(result).toUTCString()).toContain('Wed, 26 Jun 2024');
         });
     });
-    
+
     describe('isNumeric', () => {
         it('should be numeric', () => {
             const isNumber = isNumeric('5');
@@ -29,7 +29,6 @@ describe('Utils Tests', () => {
             expect(time).toEqual('2:01');
         });
     });
-    
 
     describe('getDateStringFromSlot', () => {
         it('should get the correct date string from slot', () => {
@@ -63,5 +62,4 @@ describe('Utils Tests', () => {
             expect(label).toEqual({ assetLabel: AssetNameLabel.NONE, name: 'burrito', isCip67: false });
         });
     });
-
 });
