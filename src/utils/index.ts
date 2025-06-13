@@ -128,6 +128,21 @@ export const diff = (lhs: any, rhs: any) => {
     }, deletedValues);
 };
 
+export const mapStringifyReplacer = (_key: any, value: any) => {
+    if (value instanceof Map) {
+        return Array.from(value.entries());
+    } else {
+        return value;
+    }
+}
+export const mapNoKeysStringifyReplacer = (_key: any, value: any) => {
+    if (value instanceof Map) {
+        return Array.from(value.values());
+    } else {
+        return value;
+    }
+}
+
 export { decodeCborToJson, encodeJsonToDatum, DefaultTextFormat as KeyType } from './cbor';
 
 export * from './crypto';
