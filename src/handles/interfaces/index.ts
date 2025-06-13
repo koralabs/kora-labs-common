@@ -376,7 +376,7 @@ export interface IHandleFileContent {
     slot: number;
     hash: string;
     schemaVersion?: number;
-    handles: Record<string, StoredHandle>;
+    handles: StoredHandle[];
     history: [number, ISlotHistory][];
 }
 
