@@ -89,9 +89,8 @@ export enum ScriptType {
     HAL_MINT_PROXY = 'hal_mint_proxy',
     HAL_MINT = 'hal_mint',
     HAL_MINTING_DATA = 'hal_minting_data',
-    HAL_ORDERS_MINT = 'hal_orders_mint',
     HAL_ORDERS_SPEND = 'hal_orders_spend',
-    HAL_CIP68 = 'hal_cip68'
+    HAL_REF_SPEND = 'hal_ref_spend'
 }
 
 export interface ScriptDetails {
