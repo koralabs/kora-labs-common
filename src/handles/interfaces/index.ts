@@ -90,7 +90,8 @@ export enum ScriptType {
     HAL_MINT = 'hal_mint',
     HAL_MINTING_DATA = 'hal_minting_data',
     HAL_ORDERS_SPEND = 'hal_orders_spend',
-    HAL_REF_SPEND = 'hal_ref_spend'
+    HAL_REF_SPEND = 'hal_ref_spend',
+    HAL_ROYALTY_SPEND = 'hal_royalty_spend'
 }
 
 export interface ScriptDetails {
