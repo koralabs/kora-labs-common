@@ -52,7 +52,7 @@ export interface MerchOrder {
     order_id?: number,
 }
 
-export type Permission = 'subhandle.mint' | 'subhandle.mintmyown' | 'handles.login'
+export type Permission = 'subhandles.mint' | 'subhandles.mintmyown' | 'handles.login'
 
 export type FriendlyPermissions = Record<string, string>
 
