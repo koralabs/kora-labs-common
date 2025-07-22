@@ -47,7 +47,7 @@ export const buildCharacters = (name: string): string => {
 export const buildNumericModifiers = (name: string): string => {
     const modifiers: string[] = [];
 
-    if (/^-?[0-9]\d*(\.\d+)?$/.test(name)) {
+    if (/^-?[0-9]?\d*(\.\d+)?$/.test(name)) {
         if (name.startsWith('-')) {
             modifiers.push('negative');
         }
@@ -72,17 +72,17 @@ export const buildMetadata = ({
     ogNumber?: number;
 }) => {
     const isSubHandle = handleName.includes('@');
-    const [subHandleName, rootHandleName] = handleName.split('@');
+    const [subHandleName] = handleName.split('@');
     let metadata: IHandleMetadata = {
         name: `$${handleName}`,
         image: `ipfs://${cid}`,
         mediaType: 'image/jpeg',
         og: isSubHandle ? 0 : ogNumber ? 1 : 0,
         og_number: isSubHandle ? 0 : ogNumber ?? 0,
-        rarity: getRarity(rootHandleName ?? handleName),
+        rarity: getRarity(handleName),
         length: handleName.length,
-        characters: buildCharacters(rootHandleName ?? handleName),
-        numeric_modifiers: buildNumericModifiers(rootHandleName ?? handleName),
+        characters: buildCharacters(handleName),
+        numeric_modifiers: isSubHandle ? '' :  buildNumericModifiers(handleName),
         handle_type: handleType,
         version: 1
     };
