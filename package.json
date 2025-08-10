@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.1.12",
+    "version": "6.2.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -21,8 +21,8 @@
         "lint": "ESLINT_USE_FLAT_CONFIG=false eslint --ext=.js,.ts --fix --max-warnings=0 .",
         "test": "NETWORK=mainnet node --experimental-vm-modules node_modules/.bin/jest",
         "build": "tsc",
-        "build:local": "yarn build && cp package.json ./lib/package.json && cd lib && npm i --production",
-        "npm:publish": "yarn build && cp package.json ./lib/package.json && (cd ./lib && npm publish)"
+        "build:local": "npm run build && cp package.json ./lib/package.json && cd lib && npm i --production",
+        "npm:publish": "npm run build && cp package.json ./lib/package.json && (cd ./lib && npm publish)"
     },
     "author": "",
     "license": "ISC",

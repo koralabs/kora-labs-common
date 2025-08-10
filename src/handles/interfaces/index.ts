@@ -149,6 +149,7 @@ export interface IHandle {
     numeric_modifiers: string; // 'negative,decimal',
     default_in_wallet: string; // my_default_hndl
     resolved_addresses: {
+        ada: string;
         [key: string]: string;
     };
     created_slot_number: number;

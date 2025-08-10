@@ -35,27 +35,18 @@ export interface SubHandleSettings extends ISubHandleSettings {
     utxo: IUTxO;
 }
 
-export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing;
+export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing | string;
 
 export interface StoredHandle extends IPersonalizedHandle {
     amount: number;
     default?: boolean;
     id_hash?: string;
-    pz_enabled?: boolean;
-    resolved_addresses: {
-        ada: string;
-        [key: string]: string;
-    };
     payment_key_hash: string;
     subhandle_settings?: SubHandleSettings;
     sub_rarity?: string;
     sub_length?: number;
     sub_characters?: string;
     sub_numeric_modifiers?: string;
-    virtual?: {
-        expires_time: number;
-        public_mint: boolean;
-    };
     original_address?: string;
     drep?: IDrep
 }
