@@ -1,4 +1,4 @@
-import { IPersonalizedHandle, ISubHandleSettings, IUTxO } from '.';
+import { HandleType, IPersonalizedHandle, ISubHandleSettings, IUTxO, Rarity } from '.';
 import { IMarketplaceListing } from '../../marketplace/interfaces';
 import { Sort } from '../../types';
 
@@ -13,14 +13,14 @@ export interface IApiStore {
     ) => Promise<{ slot: number; id: string; } | null>
 
     // INDEXES
-    getIndex: (index:IndexNames) => Map<string|number, ApiIndexType>;
-    getKeysFromIndex: (index:IndexNames) => (string|number)[];
+    getIndex: (index:IndexNames, limit?: {offset: number, count: number}, sort?: Sort) => Map<string|number, ApiIndexType>;
+    getKeysFromIndex: (index:IndexNames, limit?: {offset: number, count: number}, sort?: Sort) => (string|number)[];
     getValueFromIndex: (index:IndexNames, key:string|number) => ApiIndexType | undefined;
     setValueOnIndex: (index:IndexNames, key: string|number, value: ApiIndexType) => void;
     removeKeyFromIndex: (index:IndexNames, key: string|number) => void;
 
     // SET INDEXES
-    getValuesFromIndexedSet: (index:IndexNames, key: string|number) => Set<string> | undefined;
+    getValuesFromIndexedSet: (index:IndexNames, key: string|number, limit?: {offset: number, count: number}, sort?: Sort) => Set<string> | undefined;
     addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
     removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
         
@@ -111,14 +111,14 @@ export interface HolderViewModel {
 }
 
 export interface IHandleSearchParams {
-    characters?: string;
+    characters?: CharacterAttribute;
     length?: string;
-    rarity?: string;
-    numeric_modifiers?: string;
+    rarity?: Rarity;
+    numeric_modifiers?: NumericModifiersAttribute;
     search?: string;
     holder_address?: string;
     personalized?: boolean;
-    handle_type?: string;
+    handle_type?: HandleType;
     public_subhandles?: boolean;
     og?: 'true' | 'false';
 }
@@ -167,7 +167,13 @@ export enum IndexNames {
     NUMERIC_MODIFIER = 'numericmodifiers',
     OG = 'og',
     PAYMENT_KEY_HASH = 'paymentkeyhashes',
+    PERSONALIZED = 'personalized',
     RARITY = 'rarity',
+    SLOT = 'slot',
     SLOT_HISTORY = 'slothistory',
-    SUBHANDLE = 'subhandle'
+    SUBHANDLE = 'subhandle',
+    HANDLE_TYPE = 'handle_type'
 }
+
+export type CharacterAttribute = 'letters' | 'numbers' | 'special' | 'letters,numbers' | 'numbers,special' | 'letters,special' | 'letters,numbers,special';
+export type NumericModifiersAttribute = 'negative' | 'decimal' | 'negative,decimal' | ''

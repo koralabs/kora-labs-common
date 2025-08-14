@@ -1,16 +1,16 @@
-import { HandleType, IHandleSearchInput, Rarity } from '..';
+import { CharacterAttribute, HandleType, IHandleSearchInput, NumericModifiersAttribute, Rarity } from '..';
 import { ModelException } from '../../errors';
 import { isNumeric } from '../../utils';
 
 export class HandleSearchModel implements IHandleSearchInput {
-    public characters?: string;
+    public characters?: CharacterAttribute;
     public length?: string;
-    public rarity?: string;
-    public numeric_modifiers?: string;
+    public rarity?: Rarity;
+    public numeric_modifiers?: NumericModifiersAttribute;
     public search?: string;
     public holder_address?: string;
     public personalized?: boolean;
-    public handle_type?: string;
+    public handle_type?: HandleType;
     public og?: 'true' | 'false';
     public handles?: string[];
 

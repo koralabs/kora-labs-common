@@ -79,12 +79,12 @@ export const getElapsedTime = (milliseconds: number) => {
     return `${mins}:${(seconds - mins * 60).toString().padStart(2, '0')}`;
 };
 
-export const objectHasKeys = (o: any) => Object.keys(o).length === 0;
+export const objectHasKeys = (o: any) => Object.keys(o).length > 0;
 export const isEmpty = (obj: any) => [Object, Array].includes((obj || {}).constructor) && !Object.entries(obj || {}).length;
 export const isObject = (o: any) => o != null && typeof o === 'object';
 export const hasOwnProperty = (o: any, ...args: [v: PropertyKey]) => Object.prototype.hasOwnProperty.call(o, ...args);
 export const isDate = (d: any) => d instanceof Date;
-export const isEmptyObject = (o: any) => isObject(o) && objectHasKeys(o);
+export const isEmptyObject = (o: any) => isObject(o) && (!objectHasKeys(o) || Object.values(o).every(v => v == null || v == undefined));
 export const makeObjectWithoutPrototype = () => Object.create(null);
 
 export const ExcludesFalse = <T>(n?: T | undefined | null): n is T => Boolean(n);
