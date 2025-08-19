@@ -7,6 +7,7 @@ export interface IApiStore {
     initialize: () => Promise<IApiStore>;
     destroy: () => void;
     rollBackToGenesis: () => void;
+    pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
     getStartingPoint: (
         save: (handle: StoredHandle) => void, 
         failed: boolean
