@@ -78,8 +78,6 @@ export interface IApiMetrics {
     firstSlot?: number;
     lastSlot?: number;
     currentSlot?: number;
-    elapsedOgmiosExec?: number;
-    elapsedBuildingExec?: number;
     firstMemoryUsage?: number;
     currentBlockHash?: string;
     tipBlockHash?: string;
@@ -87,6 +85,7 @@ export interface IApiMetrics {
     networkSync?: number;
     count?: number;
     schemaVersion?: number;
+    startTimestamp?: number;
 }
 
 export interface DefaultHandleInfo {
