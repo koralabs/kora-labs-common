@@ -35,8 +35,8 @@ export enum CardanoNetwork {
 
 export type Network = 'preview' | 'preprod' | 'mainnet';
 
-export type Sort = 'asc' | 'desc';
-export type SortWithRandom = 'asc' | 'desc' | 'random';
+export type Sort = 'asc' | 'desc' | 'ASC' | 'DESC';
+export type SortWithRandom = Sort | 'random';
 
 export enum AddressType {
     Wallet = 'wallet',

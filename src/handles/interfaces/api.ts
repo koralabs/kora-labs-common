@@ -2,6 +2,17 @@ import { HandleType, IPersonalizedHandle, ISubHandleSettings, IUTxO, Rarity } fr
 import { IMarketplaceListing } from '../../marketplace/interfaces';
 import { Sort } from '../../types';
 
+export interface SortAndLimitOptions {
+    start?: number;
+    end?: number;
+    limit?: {
+        offset: number;
+        count: number;
+    };
+    orderBy?: Sort;
+    isAlpha?: boolean
+}
+
 export interface IApiStore {
     // SETUP
     initialize: () => Promise<IApiStore>;
@@ -14,14 +25,14 @@ export interface IApiStore {
     ) => Promise<{ slot: number; id: string; } | null>
 
     // INDEXES
-    getIndex: (index:IndexNames, limit?: {offset: number, count: number}, sort?: Sort) => Map<string|number, ApiIndexType>;
-    getKeysFromIndex: (index:IndexNames, limit?: {offset: number, count: number}, sort?: Sort) => (string|number)[];
+    getIndex: (index:IndexNames, options?: SortAndLimitOptions) => Map<string|number, ApiIndexType>;
+    getKeysFromIndex: (index:IndexNames, options?: SortAndLimitOptions) => (string|number)[];
     getValueFromIndex: (index:IndexNames, key:string|number) => ApiIndexType | undefined;
     setValueOnIndex: (index:IndexNames, key: string|number, value: ApiIndexType) => void;
     removeKeyFromIndex: (index:IndexNames, key: string|number) => void;
 
     // SET INDEXES
-    getValuesFromIndexedSet: (index:IndexNames, key: string|number, limit?: {offset: number, count: number}, sort?: Sort) => Set<string> | undefined;
+    getValuesFromIndexedSet: (index:IndexNames, key: string|number, options?: SortAndLimitOptions) => Set<string> | undefined;
     addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
     removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
         
