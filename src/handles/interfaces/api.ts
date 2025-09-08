@@ -91,6 +91,7 @@ export interface IApiMetrics {
     currentSlot?: number;
     currentBlockHash?: string;
     tipBlockHash?: string;
+    firstMemoryUsage?: number;
     memorySize?: number;
     networkSync?: number;
     handleCount?: number;
