@@ -89,12 +89,12 @@ export interface IApiMetrics {
     firstSlot?: number;
     lastSlot?: number;
     currentSlot?: number;
-    firstMemoryUsage?: number;
     currentBlockHash?: string;
     tipBlockHash?: string;
     memorySize?: number;
     networkSync?: number;
-    count?: number;
+    handleCount?: number;
+    holderCount?: number;
     schemaVersion?: number;
     startTimestamp?: number;
 }

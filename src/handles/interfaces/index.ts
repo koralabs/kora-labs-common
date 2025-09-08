@@ -184,19 +184,6 @@ export interface IPersonalizedHandle extends ICip68Handle {
     personalization?: IPersonalization;
 }
 
-export interface IApiMetricsViewModel {
-    percentage_complete: string;
-    current_memory_used: number;
-    ogmios_elapsed: string;
-    building_elapsed: string;
-    handle_count: number;
-    slot_date: Date;
-    memory_size: number;
-    current_slot: number;
-    current_block_hash: string;
-    schema_version: number;
-}
-
 export enum HandleType {
     VIRTUAL_SUBHANDLE = 'virtual_subhandle',
     NFT_SUBHANDLE = 'nft_subhandle',
