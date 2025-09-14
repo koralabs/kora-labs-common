@@ -35,7 +35,12 @@ export interface IApiStore {
     getValuesFromIndexedSet: (index:IndexNames, key: string|number, options?: SortAndLimitOptions) => Set<string> | undefined;
     addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
     removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
-        
+    
+    // ORDERED INDEXES
+    getValuesFromOrderedSet: (index:IndexNames, ordinal: number, options?: SortAndLimitOptions) => Set<string> | Map<number, ISlotHistory> | undefined;
+    addValueToOrderedSet: (index:IndexNames, ordinal: number, value: string | ISlotHistory) => void;
+    removeValuesFromOrderedSet: (index:IndexNames, keyOrOrdinal: string | number) => void;
+
     // METRICS
     getMetrics: () => IApiMetrics;
     setMetrics: (metrics: IApiMetrics) => void;
