@@ -37,7 +37,7 @@ export interface IApiStore {
     removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
     
     // ORDERED INDEXES
-    getValuesFromOrderedSet: (index:IndexNames, ordinal: number, options?: SortAndLimitOptions) => Set<string> | ISlotHistory | undefined;
+    getValuesFromOrderedSet: (index:IndexNames, ordinal: number, options?: SortAndLimitOptions) => Set<string> | ISlotHistory[] | undefined;
     addValueToOrderedSet: (index:IndexNames, ordinal: number, value: string | ISlotHistory) => void;
     removeValuesFromOrderedSet: (index:IndexNames, keyOrOrdinal: string | number) => void;
 
