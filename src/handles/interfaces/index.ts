@@ -92,7 +92,12 @@ export enum ScriptType {
     HAL_ORDERS_SPEND = 'hal_orders_spend',
     HAL_REF_SPEND_PROXY = 'hal_ref_spend_proxy',
     HAL_REF_SPEND = 'hal_ref_spend',
-    HAL_ROYALTY_SPEND = 'hal_royalty_spend'
+    HAL_ROYALTY_SPEND = 'hal_royalty_spend',
+    // Aiken PZ Contracts
+    PZ_PROXY = 'pz_proxy',
+    PZ_GOVERNOR = 'pz_governor',
+    PZ_ASSETS = 'pz_assets',
+    BG_CONSTRAINTS = 'bg_constraints'
 }
 
 export interface ScriptDetails {
