@@ -1,4 +1,4 @@
-import { IUTxO } from '../handles';
+import { UTxO } from '../handles/UTxO';
 import { AssetNameLabel } from '../types';
 
 export type NftAttributes = {
@@ -19,7 +19,7 @@ export interface IMarketplaceListing {
     asset_label?: AssetNameLabel;
     policy_id: string;
     nft_attributes?: NftAttributes;
-    utxo: IUTxO;
+    utxo: UTxO;
     holder: string;
     price: number;
     payouts: IPayout[];

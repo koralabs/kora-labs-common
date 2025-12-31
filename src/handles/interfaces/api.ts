@@ -1,6 +1,7 @@
-import { HandleType, IPersonalizedHandle, ISubHandleSettings, IUTxO, Rarity } from '.';
+import { HandleType, IPersonalizedHandle, ISubHandleSettings, MintingData, Rarity } from '.';
 import { IMarketplaceListing } from '../../marketplace/interfaces';
 import { Sort } from '../../types';
+import { UTxO, UTxOWithTxInfo } from '../UTxO';
 
 export interface SortAndLimitOptions {
     start?: number;
@@ -20,7 +21,7 @@ export interface IApiStore {
     rollBackToGenesis: () => void;
     pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
     getStartingPoint: (
-        save: (handle: StoredHandle) => void, 
+        updateHandleIndexes: (utxo: UTxOWithTxInfo) => void, 
         failed: boolean
     ) => Promise<{ slot: number; id: string; } | null>
 
@@ -45,14 +46,16 @@ export interface IApiStore {
     getMetrics: () => IApiMetrics;
     setMetrics: (metrics: IApiMetrics) => void;
     count: () => number;
-    getSchemaVersion: () => number;
+    getIndexSchemaVersion: () => number;
+    getUTxOSchemaVersion: () => number;
 }
 
 export interface SubHandleSettings extends ISubHandleSettings {
-    utxo: IUTxO;
+    utxo?: UTxO;
+    utxo_id?: string;
 }
 
-export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing | string;
+export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing | string | UTxOWithTxInfo | MintingData;
 
 export interface StoredHandle extends IPersonalizedHandle {
     amount: number;
@@ -76,9 +79,10 @@ export interface IDrep {
     cip_129: string
 }
 
-export interface HandleHistory {
-    old: Partial<StoredHandle> | null;
-    new?: Partial<StoredHandle> | null;
+
+export interface HandleUTxOHistory {
+    old: UTxOWithTxInfo | null;
+    new?: UTxOWithTxInfo | null;
 }
 
 export interface ListingHistory {
@@ -87,7 +91,7 @@ export interface ListingHistory {
 }
 
 export interface ISlotHistory {
-    [handleHex: string]: HandleHistory | ListingHistory;
+    [handleHex: string]: HandleUTxOHistory | ListingHistory;
 }
 
 export interface IApiMetrics {
@@ -101,7 +105,8 @@ export interface IApiMetrics {
     networkSync?: number;
     handleCount?: number;
     holderCount?: number;
-    schemaVersion?: number;
+    utxoSchemaVersion?: number;
+    indexSchemaVersion?: number;
     startTimestamp?: number;
 }
 
@@ -187,9 +192,11 @@ export enum IndexNames {
     PERSONALIZED = 'personalized',
     RARITY = 'rarity',
     SLOT = 'slot',
-    SLOT_HISTORY = 'slothistory',
     SUBHANDLE = 'subhandle',
-    HANDLE_TYPE = 'handle_type'
+    HANDLE_TYPE = 'handle_type',
+    UTXO_SLOT = 'utxo_slot',
+    UTXO = 'utxo',
+    MINT = 'mint'
 }
 
 export type CharacterAttribute = 'letters' | 'numbers' | 'special' | 'letters,numbers' | 'numbers,special' | 'letters,special' | 'letters,numbers,special';

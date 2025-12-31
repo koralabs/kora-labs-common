@@ -1,5 +1,5 @@
 import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
-import { ISlotHistory, StoredHandle } from './api';
+import { UTxO, UTxOWithTxInfo } from '../UTxO';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -76,50 +76,6 @@ export interface IPersonalizationPortal {
     text_setting?: string | null;
 }
 
-export enum ScriptType {
-    PZ_CONTRACT = 'pz_contract',
-    SUB_HANDLE_SETTINGS = 'sub_handle_settings',
-    MARKETPLACE_CONTRACT = 'marketplace_contract',
-    // De-Mi
-    DEMI_MINT_PROXY = 'demi_mint_proxy',
-    DEMI_MINT = 'demi_mint',
-    DEMI_MINTING_DATA = 'demi_minting_data',
-    DEMI_ORDERS = 'demi_orders',
-    // H.A.L. mint
-    HAL_MINT_PROXY = 'hal_mint_proxy',
-    HAL_MINT = 'hal_mint',
-    HAL_MINTING_DATA = 'hal_minting_data',
-    HAL_ORDERS_SPEND = 'hal_orders_spend',
-    HAL_REF_SPEND_PROXY = 'hal_ref_spend_proxy',
-    HAL_REF_SPEND = 'hal_ref_spend',
-    HAL_ROYALTY_SPEND = 'hal_royalty_spend'
-}
-
-export interface ScriptDetails {
-    handle: string;
-    handleHex: string;
-    refScriptUtxo?: string;
-    refScriptAddress?: string;
-    datumCbor?: string;
-    cbor?: string;
-    unoptimizedCbor?: string;
-    validatorHash: string;
-    latest?: boolean;
-    type: ScriptType;
-    txBuildVersion?: number;
-}
-
-export interface IUTxO {
-    tx_id: string;
-    index: number;
-    lovelace: number;
-    datum?: string;
-    address: string;
-    script?: ScriptDetails;
-}
-
-export interface IReferenceToken extends IUTxO {}
-
 export interface IPersonalization {
     portal?: IPersonalizationPortal;
     designer?: IPersonalizationDesigner;
@@ -177,7 +133,8 @@ export interface IHandle {
 }
 
 export interface ICip68Handle extends IHandle {
-    reference_token?: IReferenceToken;
+    reference_token?: UTxO;
+    reference_utxo?: string;
 }
 
 export interface IPersonalizedHandle extends ICip68Handle {
@@ -361,12 +318,18 @@ export type ISubHandleSettingsDatumStruct = [
     string // payment_address
 ];
 
+export interface MintingData { 
+    created_slot: number, 
+    metadata: any, 
+    txHash: string
+}
+
 export interface IHandleFileContent {
     slot: number;
     hash: string;
-    schemaVersion?: number;
-    handles: StoredHandle[];
-    history: [number, ISlotHistory][];
+    utxoSchemaVersion?: number;
+    utxos: UTxOWithTxInfo[];
+    mintingData: { [handle: string]: MintingData; }
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {
