@@ -36,7 +36,7 @@ export const asyncForEach = async <T, U>(
 };
 
 export const isNumeric = (n: string) => {
-    return !isNaN(parseFloat(n)) && isFinite(parseFloat(n));
+    return !isNaN(parseFloat(n)) && isFinite(Number(n));
 };
 
 export const isNullEmptyOrUndefined = (value: any) => {
