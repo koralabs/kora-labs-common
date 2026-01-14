@@ -55,7 +55,7 @@ export interface SubHandleSettings extends ISubHandleSettings {
     utxo_id?: string;
 }
 
-export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing | string | UTxOWithTxInfo | MintingData;
+export type ApiIndexType = Set<string> | Holder | ISlotHistory | StoredHandle | IMarketplaceListing | string | UTxOWithTxInfo | MintingData[];
 
 export interface StoredHandle extends IPersonalizedHandle {
     amount: number;

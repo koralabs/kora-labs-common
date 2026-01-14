@@ -329,7 +329,7 @@ export interface IHandleFileContent {
     hash: string;
     utxoSchemaVersion?: number;
     utxos: UTxOWithTxInfo[];
-    mintingData: { [handle: string]: MintingData; }
+    mintingData: { [handle: string]: MintingData[]; }
 }
 
 export interface IHandleSvgOptions extends IPersonalizationDesigner {
