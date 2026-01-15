@@ -52,8 +52,13 @@ export enum StakeAddressType {
     Key = 'e'
 }
 
+export interface KnownContract {
+    name: string;
+    projectName: string;
+}
+
 export interface AddressDetails {
     address: string;
     type: string;
-    knownOwnerName: string;
+    knownOwnerName?: KnownContract;
 }

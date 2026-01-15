@@ -76,7 +76,6 @@ describe('addresses tests', () => {
             const result = buildHolderInfo(address);
             expect(result).toEqual({
                 address: stakeAddress,
-                knownOwnerName: '',
                 type: AddressType.Wallet
             });
         });
@@ -86,7 +85,10 @@ describe('addresses tests', () => {
             const result = buildHolderInfo(address);
             expect(result).toEqual({
                 address,
-                knownOwnerName: 'jpg.store',
+                knownOwnerName: {
+                    name: 'JPG Store Contract',
+                    projectName: 'JpgStore'
+                },
                 type: AddressType.Script
             });
         });
