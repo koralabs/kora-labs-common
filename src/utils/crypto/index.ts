@@ -209,7 +209,7 @@ export const bech32AddressFromHashes = (paymentHash: string, paymentHashType: 'k
 export const buildHolderInfo = (addr: string): AddressDetails => {
     const addressType = buildPaymentAddressType(addr);
     const hash = decodeAddress(addr);
-    const knownOwnerName = contractsRegistry.get(hash?.slice(2) || '');
+    const knownOwnerName = contractsRegistry[hash?.slice(2) || ''];
     let stakeKey = null;
 
     if (addressType === AddressType.Wallet || addressType === AddressType.Script) {

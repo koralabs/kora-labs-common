@@ -1,6 +1,6 @@
 import { KnownContract } from '../types';
 
-export const contractsRegistry = new Map<string, KnownContract>(Object.entries({
+export const contractsRegistry: Record<string, KnownContract> = {
     '377325ad84a55ba0282d844dff2d5f0f18c33fd4a28a0a9d73c6f60d': {
         'name': 'Marlowe Semantics Interpreter',
         'projectName': 'Marlowe'
@@ -2349,5 +2349,5 @@ export const contractsRegistry = new Map<string, KnownContract>(Object.entries({
         'name': '',
         'projectName': 'Tokhun'
     }
-}))
+}
 
