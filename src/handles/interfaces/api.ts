@@ -21,7 +21,7 @@ export interface IApiStore {
     rollBackToGenesis: () => void;
     pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
     getStartingPoint: (
-        updateHandleIndexes: (utxo: UTxOWithTxInfo) => void, 
+        updateHandleIndexes: ((utxo: UTxOWithTxInfo) => void)[], 
         failed: boolean
     ) => Promise<{ slot: number; id: string; } | null>
 

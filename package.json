@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.4.4",
+    "version": "6.4.5",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
