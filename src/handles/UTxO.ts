@@ -30,5 +30,6 @@ export class UTxO {
 export interface UTxOWithTxInfo extends UTxO {
     handles: [string, string[]][];
     mint: [string, string[]][];
+    burn?: [string, string[]][];
     metadata: any;
 }
