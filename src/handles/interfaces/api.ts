@@ -11,8 +11,20 @@ export interface SortAndLimitOptions {
         count: number;
     };
     orderBy?: Sort;
-    isAlpha?: boolean
+    isAlpha?: boolean;
 }
+
+export enum UTxOFunctionName {
+    ADD_UTXO = 'addUtxo',
+    UPDATE_HOLDER_INDEX = 'updateHolderIndex',
+    UPDATE_HANDLE_INDEXES = 'updateHandleIndexes'
+}
+
+export type UTxOFunctions = {
+    [UTxOFunctionName.ADD_UTXO]: (utxo: UTxOWithTxInfo) => void;
+    [UTxOFunctionName.UPDATE_HOLDER_INDEX]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, holders?: Map<string, Holder>) => void;
+    [UTxOFunctionName.UPDATE_HANDLE_INDEXES]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, handles?: Map<string, StoredHandle>) => void;
+};
 
 export interface IApiStore {
     // SETUP
@@ -20,27 +32,24 @@ export interface IApiStore {
     destroy: () => void;
     rollBackToGenesis: () => void;
     pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
-    getStartingPoint: (
-        updateHandleIndexes: ((utxo: UTxOWithTxInfo) => void)[], 
-        failed: boolean
-    ) => Promise<{ slot: number; id: string; } | null>
+    getStartingPoint: (utxoFunctions: UTxOFunctions, failed: boolean) => Promise<{ slot: number; id: string } | null>;
 
     // INDEXES
-    getIndex: (index:IndexNames, options?: SortAndLimitOptions) => Map<string|number, ApiIndexType>;
-    getKeysFromIndex: (index:IndexNames, options?: SortAndLimitOptions) => (string|number)[];
-    getValueFromIndex: (index:IndexNames, key:string|number) => ApiIndexType | undefined;
-    setValueOnIndex: (index:IndexNames, key: string|number, value: ApiIndexType) => void;
-    removeKeyFromIndex: (index:IndexNames, key: string|number) => void;
+    getIndex: (index: IndexNames, options?: SortAndLimitOptions) => Map<string | number, ApiIndexType>;
+    getKeysFromIndex: (index: IndexNames, options?: SortAndLimitOptions) => (string | number)[];
+    getValueFromIndex: (index: IndexNames, key: string | number) => ApiIndexType | undefined;
+    setValueOnIndex: (index: IndexNames, key: string | number, value: ApiIndexType) => void;
+    removeKeyFromIndex: (index: IndexNames, key: string | number) => void;
 
     // SET INDEXES
-    getValuesFromIndexedSet: (index:IndexNames, key: string|number, options?: SortAndLimitOptions) => Set<string> | undefined;
-    addValueToIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
-    removeValueFromIndexedSet: (index:IndexNames, key: string|number, value: string) => void;
-    
+    getValuesFromIndexedSet: (index: IndexNames, key: string | number, options?: SortAndLimitOptions) => Set<string> | undefined;
+    addValueToIndexedSet: (index: IndexNames, key: string | number, value: string) => void;
+    removeValueFromIndexedSet: (index: IndexNames, key: string | number, value: string) => void;
+
     // ORDERED INDEXES
-    getValuesFromOrderedSet: (index:IndexNames, ordinal: number, options?: SortAndLimitOptions) => ApiIndexType[] | undefined;
-    addValueToOrderedSet: (index:IndexNames, ordinal: number, value: string | ISlotHistory) => void;
-    removeValuesFromOrderedSet: (index:IndexNames, keyOrOrdinal: string | number) => void;
+    getValuesFromOrderedSet: (index: IndexNames, ordinal: number, options?: SortAndLimitOptions) => ApiIndexType[] | undefined;
+    addValueToOrderedSet: (index: IndexNames, ordinal: number, value: string | ISlotHistory) => void;
+    removeValuesFromOrderedSet: (index: IndexNames, keyOrOrdinal: string | number) => void;
 
     // METRICS
     getMetrics: () => IApiMetrics;
@@ -68,17 +77,16 @@ export interface StoredHandle extends IPersonalizedHandle {
     sub_characters?: string;
     sub_numeric_modifiers?: string;
     original_address?: string;
-    drep?: IDrep
+    drep?: IDrep;
 }
 
 export interface IDrep {
-    type: 'drep' | 'cc_hot' | 'cc_cold',
-    cred: 'key' | 'script',
-    hex: string,
-    cip_105: string,
-    cip_129: string
+    type: 'drep' | 'cc_hot' | 'cc_cold';
+    cred: 'key' | 'script';
+    hex: string;
+    cip_105: string;
+    cip_129: string;
 }
-
 
 export interface HandleUTxOHistory {
     old: UTxOWithTxInfo | null;
@@ -108,6 +116,8 @@ export interface IApiMetrics {
     utxoSchemaVersion?: number;
     indexSchemaVersion?: number;
     startTimestamp?: number;
+    lockLambdas?: boolean;
+    lastMaxRollbackCheck?: number;
 }
 
 export interface DefaultHandleInfo {
@@ -154,8 +164,8 @@ export interface IGetAllQueryParams extends IHandleSearchParams {
     page?: string;
     sort?: Sort;
     slot_number?: string;
-    minting_type?: 'nft' | 'virtual'
-    type?: 'bech32stake' | 'holder' | 'stakekeyhash' | 'assetname' | 'handlehex' | 'paymentkeyhash' | 'bech32address' | 'hexaddress' 
+    minting_type?: 'nft' | 'virtual';
+    type?: 'bech32stake' | 'holder' | 'stakekeyhash' | 'assetname' | 'handlehex' | 'paymentkeyhash' | 'bech32address' | 'hexaddress';
 }
 
 export type ISearchBody = string[];
@@ -176,7 +186,7 @@ export interface IGetHolderAddressDetailsRequest {
 
 export type INormalizedQueryParams = {
     [key: string]: string;
-}
+};
 
 export enum IndexNames {
     ADDRESS = 'address',
@@ -200,4 +210,4 @@ export enum IndexNames {
 }
 
 export type CharacterAttribute = 'letters' | 'numbers' | 'special' | 'letters,numbers' | 'numbers,special' | 'letters,special' | 'letters,numbers,special';
-export type NumericModifiersAttribute = 'negative' | 'decimal' | 'negative,decimal' | ''
+export type NumericModifiersAttribute = 'negative' | 'decimal' | 'negative,decimal' | '';

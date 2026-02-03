@@ -2,6 +2,8 @@ export class UTxO {
     id: string;
     tx_id: string;
     index: number;
+    blockHash: string;
+    blockNum: number;
     slot: number;
     address: string;
     lovelace: number;
@@ -13,6 +15,8 @@ export class UTxO {
 
     constructor(utxo: UTxOWithTxInfo) {
         this.id = utxo.id;
+        this.blockHash = utxo.blockHash;
+        this.blockNum = utxo.blockNum;
         this.tx_id = utxo.tx_id;
         this.index = utxo.index;
         this.slot = utxo.slot;
