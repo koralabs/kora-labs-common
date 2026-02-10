@@ -22,7 +22,7 @@ export enum UTxOFunctionName {
 
 export type UTxOFunctions = {
     [UTxOFunctionName.ADD_UTXO]: (utxo: UTxOWithTxInfo) => void;
-    [UTxOFunctionName.UPDATE_HOLDER_INDEX]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, holders?: Map<string, Holder>) => void;
+    [UTxOFunctionName.UPDATE_HOLDER_INDEX]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, holders?: Map<string, HolderHandleNames>) => void;
     [UTxOFunctionName.UPDATE_HANDLE_INDEXES]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, handles?: Map<string, StoredHandle>) => void;
 };
 
@@ -34,11 +34,15 @@ export interface IApiStore {
     pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
     getStartingPoint: (utxoFunctions: UTxOFunctions, failed: boolean) => Promise<{ slot: number; id: string } | null>;
 
-    // INDEXES
+    // BASIC INDEXES
+    getValueFromIndex(index: IndexNames, key: string | number): string | undefined;
+    setValueOnIndex(index: IndexNames, key: string | number, value: string): void;
+
+    // HASH INDEXES
     getIndex: (index: IndexNames, options?: SortAndLimitOptions) => Map<string | number, ApiIndexType>;
     getKeysFromIndex: (index: IndexNames, options?: SortAndLimitOptions) => (string | number)[];
-    getValueFromIndex: (index: IndexNames, key: string | number) => ApiIndexType | undefined;
-    setValueOnIndex: (index: IndexNames, key: string | number, value: ApiIndexType) => void;
+    getHashFromIndex: (index: IndexNames, key: string | number) => ApiIndexType | undefined;
+    setHashOnIndex: (index: IndexNames, key: string | number, value: ApiIndexType) => void;
     removeKeyFromIndex: (index: IndexNames, key: string | number) => void;
 
     // SET INDEXES
@@ -120,26 +124,22 @@ export interface IApiMetrics {
     lastMaxRollbackCheck?: number;
 }
 
+export type HolderHandleNames = Set<string>;
+
 export interface DefaultHandleInfo {
     name: string;
     og_number: number;
     created_slot_number: number;
 }
-export interface Holder {
-    handles: DefaultHandleInfo[];
-    defaultHandle: string;
-    manuallySet: boolean;
-    type: string;
-    knownOwnerName: string;
-}
 
-export interface HolderViewModel {
+export interface Holder {
+    handles: string[];
     total_handles: number;
     address: string;
-    type: string;
-    known_owner_name: string;
     default_handle: string;
     manually_set: boolean;
+    type: string;
+    known_owner_name: string;
 }
 
 export interface IHandleSearchParams {
@@ -194,6 +194,7 @@ export enum IndexNames {
     HANDLE = 'handle',
     HASH_OF_STAKE_KEY_HASH = 'hashofstakekeyhash',
     HOLDER = 'holder',
+    DEFAULT_HANDLE = 'defaulthandle',
     LENGTH = 'length',
     LISTINGS = 'listings',
     NUMERIC_MODIFIER = 'numericmodifiers',
