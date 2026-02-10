@@ -6,8 +6,7 @@
     "types": "index.d.ts",
     "homepage": "https://github.com/koralabs/kora-labs-common",
     "repository": {
-        "type": "git",
-        "url": "git+https://github.com/koralabs/kora-labs-common.git"
+        "url": "https://github.com/koralabs/kora-labs-common"
     },
     "contributors": [
         {
