@@ -22,8 +22,7 @@ export enum UTxOFunctionName {
 
 export type UTxOFunctions = {
     [UTxOFunctionName.ADD_UTXO]: (utxo: UTxOWithTxInfo) => void;
-    [UTxOFunctionName.UPDATE_HOLDER_INDEX]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, holders?: Map<string, HolderHandleNames>) => void;
-    [UTxOFunctionName.UPDATE_HANDLE_INDEXES]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, handles?: Map<string, StoredHandle>) => void;
+    [UTxOFunctionName.UPDATE_HANDLE_INDEXES]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, handles?: Map<string, StoredHandle>, holders?: Map<string, HolderHandleNames>) => void;
 };
 
 export interface IApiStore {
