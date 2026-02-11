@@ -27,7 +27,7 @@ export type UTxOFunctions = {
 
 export interface IApiStore {
     // SETUP
-    initialize: () => Promise<IApiStore>;
+    initialize: () => IApiStore;
     destroy: () => void;
     rollBackToGenesis: () => void;
     pipeline: (commands: CallableFunction) => ApiIndexType | ApiIndexType[] | void;
