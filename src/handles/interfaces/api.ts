@@ -190,12 +190,15 @@ export type INormalizedQueryParams = {
 export enum IndexNames {
     ADDRESS = 'address',
     CHARACTER = 'characters',
+    DEFAULT_HANDLE = 'defaulthandle',
     HANDLE = 'handle',
+    HANDLE_TYPE = 'handle_type',
     HASH_OF_STAKE_KEY_HASH = 'hashofstakekeyhash',
     HOLDER = 'holder',
-    DEFAULT_HANDLE = 'defaulthandle',
+    HOLDER_COUNT = 'holdercount',
     LENGTH = 'length',
     LISTINGS = 'listings',
+    MINT = 'mint',
     NUMERIC_MODIFIER = 'numericmodifiers',
     OG = 'og',
     PAYMENT_KEY_HASH = 'paymentkeyhashes',
@@ -203,10 +206,8 @@ export enum IndexNames {
     RARITY = 'rarity',
     SLOT = 'slot',
     SUBHANDLE = 'subhandle',
-    HANDLE_TYPE = 'handle_type',
-    UTXO_SLOT = 'utxo_slot',
     UTXO = 'utxo',
-    MINT = 'mint'
+    UTXO_SLOT = 'utxo_slot',
 }
 
 export type CharacterAttribute = 'letters' | 'numbers' | 'special' | 'letters,numbers' | 'numbers,special' | 'letters,special' | 'letters,numbers,special';
