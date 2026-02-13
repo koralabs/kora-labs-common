@@ -92,6 +92,19 @@ describe('addresses tests', () => {
                 type: AddressType.Script
             });
         });
+
+        it('should get the address holder details for a known owner', async () => {
+            const address = 'addr1zxgx3far7qygq0k6epa0zcvcvrevmn0ypsnfsue94nsn3tvpw288a4x0xf8pxgcntelxmyclq83s0ykeehchz2wtspks905plm';
+            const result = buildHolderInfo(address);
+            expect(result).toEqual({
+                address: 'stake1uxqh9rn76n8nynsnyvf4ulndjv0srcc8jtvumut3989cqmgjt49h6', 
+                knownOwnerName: {
+                    name: 'JPG Store V2 Contract', 
+                    projectName: 'JpgStore'
+                }, 
+                type: AddressType.Script
+            });
+        });
     });
 });
 
