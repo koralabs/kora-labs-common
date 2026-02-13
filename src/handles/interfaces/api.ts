@@ -20,6 +20,15 @@ export enum UTxOFunctionName {
     UPDATE_HANDLE_INDEXES = 'updateHandleIndexes'
 }
 
+export enum LockedLambdaReason {
+    REINDEX = 'REINDEX',
+    SCANNING = 'SCANNING',
+    ROLLBACK = 'ROLLBACK',
+    ROLLBACK_2160 = 'ROLLBACK_2160',
+    ROLLBACK_20 = 'ROLLBACK_20',
+    UNLOCKED = '',
+}
+
 export type UTxOFunctions = {
     [UTxOFunctionName.ADD_UTXO]: (utxo: UTxOWithTxInfo) => void;
     [UTxOFunctionName.UPDATE_HANDLE_INDEXES]: (utxo: UTxOWithTxInfo, mintingData?: Map<string, MintingData[]>, handles?: Map<string, StoredHandle>, holders?: Map<string, HolderHandleNames>) => void;
@@ -119,7 +128,8 @@ export interface IApiMetrics {
     utxoSchemaVersion?: number;
     indexSchemaVersion?: number;
     startTimestamp?: number;
-    lockLambdas?: boolean;
+    lockLambdas?: LockedLambdaReason;
+    lockLambdasTimestamp?: number;
     lastMaxRollbackCheck?: number;
 }
 
