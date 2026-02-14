@@ -1,3 +1,4 @@
+import { IS_LOCAL } from '../constants';
 import { Environment } from '../environment';
 import { CardanoNetwork } from '../types';
 // Fix from https://stackoverflow.com/questions/18391212/is-it-not-possible-to-stringify-an-error-using-json-stringify
@@ -46,6 +47,21 @@ export class Logger {
         this.network = Environment.getCardanoNetwork();
 
         Logger.isInitialized = true;
+    }
+
+    public static local(
+        args:
+            | {
+                  message: string;
+                  category?: LogCategory;
+                  event?: string;
+                  milliseconds?: number;
+                  count?: number;
+                  dimensions?: string[];
+              }
+            | string
+        ): void {
+            if (IS_LOCAL) this.log(args);
     }
 
     public static log(
