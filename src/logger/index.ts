@@ -27,6 +27,20 @@ export enum LogCategory {
     NOTIFY = 'NOTIFY'
 }
 
+const ANSI_RESET = '\x1b[0m';
+const ANSI_BLUE = '\x1b[34m';
+const ANSI_GREEN = '\x1b[32m';
+const ANSI_YELLOW = '\x1b[33m';
+const ANSI_ORANGE = '\x1b[38;5;208m';
+const ANSI_RED = '\x1b[31m';
+
+const LOCAL_CATEGORY_COLORS: Partial<Record<LogCategory, string>> = {
+    [LogCategory.INFO]: ANSI_GREEN,
+    [LogCategory.WARN]: ANSI_YELLOW,
+    [LogCategory.ERROR]: ANSI_ORANGE,
+    [LogCategory.NOTIFY]: ANSI_RED
+};
+
 export class Logger {
     public static application: string;
     public static network: CardanoNetwork;
@@ -60,8 +74,19 @@ export class Logger {
                   dimensions?: string[];
               }
             | string
-        ): void {
-            if (IS_LOCAL) this.log(args);
+    ): void {
+        if (!IS_LOCAL) return;
+
+        const localPrefix = this.colorize('[LOCAL]', ANSI_BLUE);
+        if (typeof args === 'string') {
+            this.log(`${localPrefix} ${args}`);
+            return;
+        }
+
+        this.log({
+            ...args,
+            message: `${localPrefix} ${args.message}`
+        });
     }
 
     public static log(
@@ -95,6 +120,9 @@ export class Logger {
     ): void {
         const now = new Date().toISOString();
         message = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); // escape double quotes and already escaped escapes
+        const logCategory = category ?? LogCategory.INFO;
+        const logCategoryColor = IS_LOCAL ? LOCAL_CATEGORY_COLORS[logCategory] : undefined;
+        const displayCategory = logCategoryColor ? this.colorize(logCategory, logCategoryColor) : logCategory;
         const log_event = event ? `, "event": "${event}"` : '';
         const log_milliseconds =
             milliseconds != undefined && milliseconds != null ? `, "milliseconds": ${milliseconds}` : '';
@@ -116,7 +144,11 @@ export class Logger {
                 break;
         }
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
-        logFunc(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${ category ?? LogCategory.INFO }", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
+        logFunc(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${displayCategory}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
+    }
+
+    private static colorize(value: string, ansiColor: string): string {
+        return `${ansiColor}${value}${ANSI_RESET}`;
     }
 }
