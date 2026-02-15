@@ -45,18 +45,33 @@ export class Logger {
     public static application: string;
     public static network: CardanoNetwork;
     private static isInitialized = false;
+    private static isInitializing = false;
+
+    private static getSynchronousApplicationNameFallback(): string {
+        if (process.env.NODE_ENV === 'test') return 'TEST';
+        return process.env.APPLICATION_NAME ?? process.env.AWS_LAMBDA_FUNCTION_NAME ?? process.env.ECS_CLUSTER ?? process.cwd();
+    }
+
+    private static setFallbackMetadata(): void {
+        if (!Logger.application) {
+            Logger.application = this.getSynchronousApplicationNameFallback();
+        }
+        if (!Logger.network) {
+            Logger.network = Environment.getCardanoNetwork();
+        }
+    }
 
     public static async initialize(): Promise<void> {
+        this.setFallbackMetadata();
         if (process.env.NODE_ENV !== 'test') {
-            if (!Logger.application) {
+            try {
                 const potentialName = await Environment.getPotentialApplicationName();
-                if (!potentialName) {
-                    throw new Error('Logger.application must be set!');
+                if (potentialName) {
+                    Logger.application = potentialName;
                 }
-                Logger.application = potentialName;
+            } catch {
+                // fall back to sync-derived application name
             }
-        } else {
-            Logger.application = 'TEST';
         }
         this.network = Environment.getCardanoNetwork();
 
@@ -101,7 +116,15 @@ export class Logger {
               }
             | string
     ): void {
-        if (!Logger.isInitialized) Logger.initialize();
+        this.setFallbackMetadata();
+        if (!Logger.isInitialized && !Logger.isInitializing) {
+            Logger.isInitializing = true;
+            Logger.initialize()
+                .catch(() => {})
+                .finally(() => {
+                    Logger.isInitializing = false;
+                });
+        }
         if (typeof args === 'string') {
             this.log_entry(LogCategory.INFO, args);
             return;
