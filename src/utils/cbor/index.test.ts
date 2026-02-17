@@ -604,6 +604,16 @@ describe('CBOR tests', () => {
         });
     });
 
+    describe('Decode null values', () => {
+        it('should decode arrays and maps containing null values', async () => {
+            const decodedArray = await decodeCborToJson({ cborString: '81f6' }); // [null]
+            const decodedMap = await decodeCborToJson({ cborString: 'a16161f6' }); // { "a": null }
+
+            expect(decodedArray).toEqual([null]);
+            expect(decodedMap).toEqual({ a: null });
+        });
+    });
+
     describe('Decode/Encode Address', () => {
         it('should decode an address', async () => {
             const cbor = 'd8799f9fd8799fd8799fd8799f581ca9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49ffd8799fd8799fd8799f581ca36da2f9e93c05ddcb462f49e1bf181e933421db2ee259cdab70a960ffffffff1a05f5e100ffff581ca9a352a39f82bb2160ec856c1147cbf8ac5116e20c863c990ef61e49ff';

@@ -295,6 +295,13 @@ const getAddressHexFromObject = (obj: AddressDatum) => {
 };
 
 const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = DefaultTextFormat.UTF8, forJson = true }: { val: any; constr?: number | null; schema?: any; defaultKeyType?: DefaultTextFormat; forJson?: boolean }): any => {
+    if (val === null || val === undefined) {
+        if (schema === 'bool' && isBooleanable(val)) {
+            return boolean(val);
+        }
+        return val;
+    }
+
     const isMap = val instanceof Map;
     if (isMap) {
         const obj = new Map();
