@@ -1,0 +1,39 @@
+(node:423204) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423545) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423499) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423507) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423509) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423546) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423530) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423525) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:423538) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/http/index.test.ts
+PASS src/logger/index.test.ts
+PASS src/handles/utils.test.ts
+PASS src/utils/index.test.ts
+PASS src/utils/crypto/crypto.test.ts
+PASS src/utils/cbor/index.test.ts
+PASS src/logger/coverageGuardrail.test.ts
+PASS src/protectedWords/index.test.ts
+----------------------|---------|----------|---------|---------|-------------------
+File                  | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------------------|---------|----------|---------|---------|-------------------
+All files             |     100 |      100 |     100 |     100 |                   
+ coverageGuardrail.ts |     100 |      100 |     100 |     100 |                   
+----------------------|---------|----------|---------|---------|-------------------
+
+Test Suites: 8 passed, 8 total
+Tests:       67 passed, 67 total
+Snapshots:   0 total
+Time:        4.387 s
+Ran all test suites.
+Coverage threshold met (line=100%, branch=100%).
