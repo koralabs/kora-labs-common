@@ -46,5 +46,8 @@
         "cbor": "^9.0.2",
         "crc": "^4.3.2",
         "pluralize-esm": "^9.0.5"
+    },
+    "overrides": {
+        "minimatch": "10.2.2"
     }
 }
