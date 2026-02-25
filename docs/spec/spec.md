@@ -5,11 +5,11 @@
 ### Module Groups
 - `constants`: runtime constants, network flags, policy lists, contracts registry.
 - `environment`: compute-environment and runtime metadata discovery.
-- `logger`: structured logging utilities and category controls.
+- `logger`: structured logging utilities and category controls, including `LogCategory.USER_ISSUE` and structured `context` payload support.
 - `http`: lightweight request/response wrappers.
 - `handles`: handle domain constants, interfaces, models, policy helpers, API wrapper, and UTxO model.
 - `protectedWords`: protected/reserved word policy engine.
-- `utils`: generic utilities plus `crypto` and `cbor` submodules.
+- `utils`: generic utilities plus `crypto` and `cbor` submodules, including `createUserIssueTrackingId`, `isUserIssueTrackingId`, `normalizeUserIssueEventSegment`, and `buildUserIssueEventKey`.
 - `repositories`, `marketplace`, `types`: shared contracts/types consumed by service repos.
 
 ### Entry Surface

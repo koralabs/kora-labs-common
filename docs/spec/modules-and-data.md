@@ -2,10 +2,12 @@
 
 ## Module Map
 - `src/constants/contractsRegistry.ts`: static map of known contract key hashes to project metadata.
+- `src/logger/index.ts`: shared structured logger and log category contract, including `USER_ISSUE`.
 - `src/handles/interfaces/*`: canonical types for handle metadata, personalization, API data, and mint settings.
 - `src/repositories/interfaces.ts`: contracts for OAuth clients/grants and permissions.
 - `src/marketplace/interfaces.ts`: marketplace listing and payout datum shapes.
 - `src/types/*`: shared enums and utility types (network, address type, profile header settings, gallery items).
+- `src/utils/index.ts`: shared utility helpers including user-issue tracking ID and event-key normalization helpers.
 
 ## Critical Flows
 
@@ -32,4 +34,7 @@
 ## Operational Notes
 - `HandlesApi` must be initialized before use; requests include `KORA_USER_AGENT` and optional API key headers.
 - Logger local colorization is enabled only when `IS_LOCAL=true`.
+- `Logger.log` supports a structured `context` payload for machine-readable operational events.
+- `createUserIssueTrackingId` + `isUserIssueTrackingId` provide shared `UI-<base36Timestamp>-<base36Random6>` tracking ID generation/validation.
+- `normalizeUserIssueEventSegment` + `buildUserIssueEventKey` provide deterministic `user_issue.<repo>.<flow>.<pathOrFunction>.<step>` event naming.
 - Slot/date helpers depend on network epoch constants and should stay synchronized with Cardano network assumptions.

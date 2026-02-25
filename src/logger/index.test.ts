@@ -79,4 +79,25 @@ describe('Logger', () => {
         expect(`${entry}`).toContain('"application": "');
         expect(`${entry}`).not.toContain('"application": "undefined"');
     });
+
+    it('serializes USER_ISSUE category logs with event and context payload', async () => {
+        const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        const { Logger, LogCategory } = await resetLoggerModule(false);
+
+        Logger.log({
+            message: 'transaction submit failed',
+            category: LogCategory.USER_ISSUE,
+            event: 'user_issue.handle_me.mint.search_mint.submit_tx',
+            context: {
+                trackingId: 'UI-mt6xkqf-9a1bc2',
+                flow: 'mint',
+                step: 'submit_tx'
+            }
+        });
+
+        const [entry] = logSpy.mock.calls[0];
+        expect(`${entry}`).toContain('"category": "USER_ISSUE"');
+        expect(`${entry}`).toContain('"event": "user_issue.handle_me.mint.search_mint.submit_tx"');
+        expect(`${entry}`).toContain('"context": {"trackingId":"UI-mt6xkqf-9a1bc2","flow":"mint","step":"submit_tx"}');
+    });
 });

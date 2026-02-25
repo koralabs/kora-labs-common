@@ -10,3 +10,4 @@
 - [Spec Index](./spec/index.md)
 - [Technical Spec](./spec/spec.md)
 - [Modules and Data](./spec/modules-and-data.md)
+- [USER_ISSUE Logging Contract](./spec/user-issue-logging.md)

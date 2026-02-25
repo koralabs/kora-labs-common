@@ -24,7 +24,8 @@ export enum LogCategory {
     WARN = 'WARN',
     ERROR = 'ERROR',
     FATAL = 'FATAL',
-    NOTIFY = 'NOTIFY'
+    NOTIFY = 'NOTIFY',
+    USER_ISSUE = 'USER_ISSUE'
 }
 
 const ANSI_RESET = '\x1b[0m';
@@ -87,6 +88,7 @@ export class Logger {
                   milliseconds?: number;
                   count?: number;
                   dimensions?: string[];
+                  context?: Record<string, unknown>;
               }
             | string
     ): void {
@@ -113,6 +115,7 @@ export class Logger {
                   milliseconds?: number;
                   count?: number;
                   dimensions?: string[];
+                  context?: Record<string, unknown>;
               }
             | string
     ): void {
@@ -129,8 +132,8 @@ export class Logger {
             this.log_entry(LogCategory.INFO, args);
             return;
         }
-        const { message, category, event, milliseconds, count, dimensions } = args;
-        this.log_entry(category ?? LogCategory.INFO, message, event, milliseconds, count, dimensions);
+        const { message, category, event, milliseconds, count, dimensions, context } = args;
+        this.log_entry(category ?? LogCategory.INFO, message, event, milliseconds, count, dimensions, context);
     }
 
     private static log_entry(
@@ -139,7 +142,8 @@ export class Logger {
         event?: string,
         milliseconds?: number,
         count?: number,
-        dimensions?: string[]
+        dimensions?: string[],
+        context?: Record<string, unknown>
     ): void {
         const now = new Date().toISOString();
         message = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); // escape double quotes and already escaped escapes
@@ -152,6 +156,7 @@ export class Logger {
         const log_count = count != undefined && count != null ? `, "count": ${count}` : '';
         const log_dimensions =
             dimensions && Object.keys(dimensions).length ? `, "dimensions": ${JSON.stringify(dimensions)}` : '';
+        const log_context = context ? `, "context": ${JSON.stringify(context)}` : '';
         let logFunc = console.log;
         switch (category) {
             case LogCategory.DEBUG:
@@ -167,7 +172,7 @@ export class Logger {
                 break;
         }
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
-        logFunc(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${displayCategory}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions} }`);
+        logFunc(`{"network": "${Logger.network}", "application": "${Logger.application}", "category": "${displayCategory}", "message": "${message}"${log_event}, "timestamp": "${now}"${log_milliseconds}${log_count}${log_dimensions}${log_context} }`);
         // PLEASE KEEP THIS ALL ON ONE LINE SO LOGS AREN'T BROKEN UP
     }
 

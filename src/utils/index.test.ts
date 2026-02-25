@@ -1,5 +1,16 @@
 import { AssetNameLabel } from '../types';
-import { checkNameLabel, getDateFromSlot, getDateStringFromSlot, getElapsedTime, getSlotNumberFromDate, isNumeric } from './';
+import {
+    buildUserIssueEventKey,
+    checkNameLabel,
+    createUserIssueTrackingId,
+    getDateFromSlot,
+    getDateStringFromSlot,
+    getElapsedTime,
+    getSlotNumberFromDate,
+    isNumeric,
+    isUserIssueTrackingId,
+    normalizeUserIssueEventSegment
+} from './';
 
 describe('Utils Tests', () => {
     describe('getDateFromSlot Tests', () => {
@@ -60,6 +71,51 @@ describe('Utils Tests', () => {
             const assetName = `${Buffer.from('burrito').toString('hex')}`;
             const label = checkNameLabel(assetName);
             expect(label).toEqual({ assetLabel: AssetNameLabel.NONE, name: 'burrito', isCip67: false });
+        });
+    });
+
+    describe('user issue tracking id', () => {
+        it('should build deterministic tracking id when timestamp/random are provided', () => {
+            const timestamp = 1700000000000;
+            const id = createUserIssueTrackingId({ timestamp, random: () => 0 });
+            expect(id).toEqual(`UI-${Math.floor(timestamp).toString(36)}-000000`);
+        });
+
+        it('should validate generated tracking id format', () => {
+            const id = createUserIssueTrackingId({ timestamp: 1700000000000, random: () => 0.5 });
+            expect(isUserIssueTrackingId(id)).toEqual(true);
+        });
+
+        it('should reject invalid tracking id formats', () => {
+            expect(isUserIssueTrackingId('UI-abc-12345')).toEqual(false);
+            expect(isUserIssueTrackingId('ui-abc-123456')).toEqual(false);
+            expect(isUserIssueTrackingId('UI-ABC-123456')).toEqual(false);
+        });
+    });
+
+    describe('user issue event key normalization', () => {
+        it('should normalize event segments to safe tokens', () => {
+            expect(normalizeUserIssueEventSegment('Handle.Me Mint/Search Exists Pay Modal')).toEqual(
+                'handle_me_mint_search_exists_pay_modal'
+            );
+            expect(normalizeUserIssueEventSegment('  submit-tx  ')).toEqual('submit_tx');
+        });
+
+        it('should build deterministic user issue event key', () => {
+            expect(
+                buildUserIssueEventKey(
+                    'handle.me',
+                    'mint',
+                    'Search Exists Pay Modal',
+                    'submit-tx'
+                )
+            ).toEqual('user_issue.handle_me.mint.search_exists_pay_modal.submit_tx');
+        });
+
+        it('should use unknown for empty normalized segments', () => {
+            expect(buildUserIssueEventKey('', 'mint', '!!!', 'submit-tx')).toEqual(
+                'user_issue.unknown.mint.unknown.submit_tx'
+            );
         });
     });
 });

@@ -143,6 +143,52 @@ export const mapNoKeysStringifyReplacer = (_key: any, value: any) => {
     }
 }
 
+const BASE36_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
+const USER_ISSUE_RANDOM_SEGMENT_LENGTH = 6;
+export const USER_ISSUE_TRACKING_ID_REGEX = /^UI-[0-9a-z]+-[0-9a-z]{6}$/;
+
+export const createUserIssueTrackingId = ({
+    timestamp = Date.now(),
+    random = Math.random
+}: {
+    timestamp?: number;
+    random?: () => number;
+} = {}): string => {
+    const timestampBase36 = Math.max(0, Math.floor(timestamp)).toString(36);
+    let randomSegment = '';
+
+    for (let i = 0; i < USER_ISSUE_RANDOM_SEGMENT_LENGTH; i++) {
+        const sample = random();
+        const clamped = Number.isFinite(sample) ? Math.min(0.999999999, Math.max(0, sample)) : 0;
+        const idx = Math.floor(clamped * BASE36_CHARS.length);
+        randomSegment += BASE36_CHARS[idx];
+    }
+
+    return `UI-${timestampBase36}-${randomSegment}`;
+};
+
+export const isUserIssueTrackingId = (value: unknown): value is string => {
+    return typeof value === 'string' && USER_ISSUE_TRACKING_ID_REGEX.test(value);
+};
+
+export const normalizeUserIssueEventSegment = (value: string): string => {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .replace(/_+/g, '_');
+};
+
+export const buildUserIssueEventKey = (
+    repo: string,
+    flow: string,
+    pathOrFunction: string,
+    step: string
+): string => {
+    const segment = (value: string) => normalizeUserIssueEventSegment(value) || 'unknown';
+    return `user_issue.${segment(repo)}.${segment(flow)}.${segment(pathOrFunction)}.${segment(step)}`;
+};
+
 export { decodeCborToJson, encodeJsonToDatum, DefaultTextFormat as KeyType } from './cbor';
 
 export * from './crypto';
