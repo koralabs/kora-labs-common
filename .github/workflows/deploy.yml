@@ -20,6 +20,7 @@ jobs:
       id: publish
       env:
         DEPLOYMENT_ACCESS_TOKEN: ${{ secrets.DEPLOYMENT_ACCESS_TOKEN }}
+        ADAHANDLE_DEPLOYMENTS_REF: codex/deployment-kms-migration
         SECRETS_CONTEXT: ${{ toJson(secrets) }}
         VARS_CONTEXT: ${{ toJson(vars) }}
         GITHUB_CONTEXT: ${{ toJson(github) }}
