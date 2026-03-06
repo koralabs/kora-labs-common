@@ -1,15 +1,15 @@
 export enum ProfileHeaderBannerImageTypes {
-    personalized_background = "personalized_background",
-    circuit_board = "circuit_board",
-    hidden = "hidden",
-    asset = "asset"
+    personalized_background = 'personalized_background',
+    circuit_board = 'circuit_board',
+    hidden = 'hidden',
+    asset = 'asset'
 }
 
 export enum ProfileHeaderPFPImageTypes {
-    personalized_handle = "personalized_handle",
-    pfp = "pfp",
-    hidden = "hidden",
-    asset = "asset"
+    personalized_handle = 'personalized_handle',
+    pfp = 'pfp',
+    hidden = 'hidden',
+    asset = 'asset'
 }
 
 export interface ProfileHeaderBannerSetting {

@@ -9,7 +9,7 @@ export async function decryptKmsCiphertext(
 ): Promise<string> {
     const response = await client.send(
         new DecryptCommand({
-            CiphertextBlob: Buffer.from(ciphertext, 'base64'),
+            CiphertextBlob: Buffer.from(ciphertext, 'base64')
         }),
     );
     if (!response.Plaintext) {
@@ -21,7 +21,7 @@ export async function decryptKmsCiphertext(
 export async function hydrateKmsEnvironment({
     env = process.env,
     client = new KMSClient({}),
-    keys,
+    keys
 }: {
     env?: NodeJS.ProcessEnv;
     client?: KmsClientLike;
