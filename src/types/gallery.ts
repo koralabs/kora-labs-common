@@ -1,6 +1,6 @@
 // policy featured
 export interface PolicyFeaturedItem {
-    type: "policy";
+    type: 'policy';
     hex: string;
     name?: string;
     image?: string;
@@ -12,12 +12,12 @@ export interface PolicyFeaturedItem {
 
 // separator featured
 export interface SeparatorFeaturedItem {
-    type: "separator";
+    type: 'separator';
 }
 
 // asset featured
 export interface AssetFeaturedItem {
-    type: "asset";
+    type: 'asset';
     hex: string;
     fileIndex?: number;
     link?: string;
