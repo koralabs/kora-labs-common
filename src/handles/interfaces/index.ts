@@ -1,5 +1,6 @@
 import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
-import { UTxO, UTxOWithTxInfo } from '../UTxO';
+import type { ScriptDetails } from './ScriptDetails';
+import { UTxOWithTxInfo } from '../UTxO';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
@@ -13,6 +14,21 @@ export interface SocialItem {
     display: string;
     url: string;
 }
+
+export interface IUTxO {
+    id?: string;
+    tx_id: string;
+    index: number;
+    lovelace: number;
+    datum?: string;
+    address: string;
+    blockHash?: string;
+    blockNum?: number;
+    slot?: number;
+    script?: ScriptDetails;
+}
+
+export interface IReferenceToken extends IUTxO {}
 
 interface ISharedPzDesigner {
     pfp_border_color?: HexStringOrEmpty;
@@ -133,7 +149,7 @@ export interface IHandle {
 }
 
 export interface ICip68Handle extends IHandle {
-    reference_token?: UTxO;
+    reference_token?: IReferenceToken;
     reference_utxo?: string;
 }
 
