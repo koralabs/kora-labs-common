@@ -45,3 +45,15 @@ export async function hydrateKmsEnvironment({
 
     return hydratedKeys;
 }
+
+export async function loadAfterHydratingKmsEnvironment<T>(
+    load: () => Promise<T>,
+    options?: {
+        env?: NodeJS.ProcessEnv;
+        client?: KmsClientLike;
+        keys?: string[];
+    },
+): Promise<T> {
+    await hydrateKmsEnvironment(options);
+    return load();
+}

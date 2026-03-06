@@ -1,4 +1,4 @@
-import { decryptKmsCiphertext, hydrateKmsEnvironment } from './kmsEnvironment';
+import { decryptKmsCiphertext, hydrateKmsEnvironment, loadAfterHydratingKmsEnvironment } from './kmsEnvironment';
 
 describe('kmsEnvironment', () => {
     it('hydrates missing environment values from matching *_ENC keys', async () => {
@@ -45,5 +45,25 @@ describe('kmsEnvironment', () => {
                 { send } as any,
             ),
         ).rejects.toThrow('KMS decrypt returned empty plaintext');
+    });
+
+    it('loads the target module after hydrating missing plaintext values', async () => {
+        const send = jest.fn().mockResolvedValue({
+            Plaintext: Buffer.from('decoded-secret'),
+        });
+        const env = {
+            API_KEY_ENC: Buffer.from('ciphertext').toString('base64'),
+        } as NodeJS.ProcessEnv;
+
+        const loaded = await loadAfterHydratingKmsEnvironment(
+            async () => ({ apiKey: env.API_KEY }),
+            {
+                env,
+                client: { send } as any,
+            },
+        );
+
+        expect(loaded).toEqual({ apiKey: 'decoded-secret' });
+        expect(send).toHaveBeenCalledTimes(1);
     });
 });
