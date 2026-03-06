@@ -1,6 +1,6 @@
 import { BoolInt, FeaturedItemType, HexString, HexStringOrEmpty } from '../../types';
 import type { ScriptDetails } from './ScriptDetails';
-import { UTxO, UTxOWithTxInfo } from '../UTxO';
+import { UTxOWithTxInfo } from '../UTxO';
 
 export enum Rarity {
     basic = 'basic', // - 8-15 characters
