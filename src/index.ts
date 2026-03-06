@@ -1,4 +1,5 @@
 export * from './constants';
+export * from './aws';
 export { ComputeEnvironment, Environment } from './environment';
 export * from './errors';
 export * from './handles';
