@@ -230,7 +230,7 @@ export const getDateStringFromSlot = (currentSlot: number): Date => {
         return new Date((1666656000 + currentSlot) * 1000);
     }
     if (NETWORK == 'preprod') {
-        return new Date((1654041600 + currentSlot) * 1000);
+        return new Date((1655683200 + currentSlot) * 1000);
     }
     return new Date((1596491091 + (currentSlot - 4924800)) * 1000);
 };
@@ -240,7 +240,7 @@ export const getSlotNumberFromDate = (date: Date): number => {
         return Math.floor(date.getTime() / 1000) - 1666656000;
     }
     if (NETWORK == 'preprod') {
-        return Math.floor(date.getTime() / 1000) - 1654041600;
+        return Math.floor(date.getTime() / 1000) - 1655683200;
     }
     // Ignore parens to show intent
     // prettier-ignore

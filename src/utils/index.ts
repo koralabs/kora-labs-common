@@ -58,7 +58,7 @@ export const getDateFromSlot = (currentSlot: number, network?: string): number =
     //console.log(`preview slot date = ${new Date(currentSlot * 1000)}`)
     const currentNetwork = network ? network.toLowerCase() : process.env.NETWORK?.toLowerCase();
     if (currentNetwork == 'preview') return (1666656000 + currentSlot) * 1000;
-    if (currentNetwork == 'preprod') return (1654041600 + currentSlot) * 1000;
+    if (currentNetwork == 'preprod') return (1655683200 + currentSlot) * 1000;
 
     return (1596491091 + (currentSlot - 4924800)) * 1000;
 };
@@ -66,7 +66,7 @@ export const getDateFromSlot = (currentSlot: number, network?: string): number =
 export const getSlotNumberFromDate = (date: Date, network?: string): number => {
     const currentNetwork = network ? network.toLowerCase() : process.env.NETWORK?.toLowerCase();
     if (currentNetwork == 'preview') return Math.floor(date.getTime() / 1000) - 1666656000;
-    if (currentNetwork == 'preprod') return Math.floor(date.getTime() / 1000) - 1654041600;
+    if (currentNetwork == 'preprod') return Math.floor(date.getTime() / 1000) - 1655683200;
 
     // Ignore parens to show intent
     // prettier-ignore

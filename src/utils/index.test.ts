@@ -4,7 +4,6 @@ import {
     checkNameLabel,
     createUserIssueTrackingId,
     getDateFromSlot,
-    getDateStringFromSlot,
     getElapsedTime,
     getSlotNumberFromDate,
     isNumeric,
@@ -25,6 +24,12 @@ describe('Utils Tests', () => {
             const result = getDateFromSlot(currentSlot, 'preview');
             expect(new Date(result).toUTCString()).toContain('Wed, 26 Jun 2024');
         });
+
+        it('should return the correct date for preprod', () => {
+            const currentSlot = 117334474;
+            const result = getDateFromSlot(currentSlot, 'preprod');
+            expect(new Date(result).toISOString()).toEqual('2026-03-09T00:54:34.000Z');
+        });
     });
 
     describe('isNumeric', () => {
@@ -42,9 +47,16 @@ describe('Utils Tests', () => {
     });
 
     describe('getDateStringFromSlot', () => {
-        it('should get the correct date string from slot', () => {
-            const date = getDateStringFromSlot(78200473);
-            expect(date).toEqual(new Date('2022-11-30T00:06:04.000Z'));
+        it('should get the correct preprod date string from slot', async () => {
+            const originalNetwork = process.env.NETWORK;
+            process.env.NETWORK = 'PREPROD';
+            jest.resetModules();
+
+            const { getDateStringFromSlot } = await import('./');
+            const date = getDateStringFromSlot(117334474);
+
+            expect(date).toEqual(new Date('2026-03-09T00:54:34.000Z'));
+            process.env.NETWORK = originalNetwork;
         });
     });
 
@@ -52,6 +64,11 @@ describe('Utils Tests', () => {
         it('should get the correct date string from slot', () => {
             const date = getSlotNumberFromDate(new Date('2022-11-30T00:06:04.000Z'));
             expect(date).toEqual(78200473);
+        });
+
+        it('should get the correct preprod slot from date', () => {
+            const date = getSlotNumberFromDate(new Date('2026-03-09T00:54:34.000Z'), 'preprod');
+            expect(date).toEqual(117334474);
         });
     });
 
