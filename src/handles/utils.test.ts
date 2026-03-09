@@ -1,4 +1,5 @@
 import { HandleType, Rarity } from './interfaces';
+import { ScriptType } from './interfaces/ScriptDetails';
 import { buildMetadata, checkHandlePattern } from './utils';
 
 describe('validation tests', () => {
@@ -142,5 +143,15 @@ describe('buildMetadata', () => {
             sub_numeric_modifiers: '',
             sub_rarity: Rarity.ultra_rare
         });
+    });
+});
+
+describe('ScriptType', () => {
+    it('uses canonical slug values', () => {
+        expect(ScriptType.PZ_CONTRACT).toBe('pers');
+        expect(ScriptType.SUB_HANDLE_SETTINGS).toBe('subh');
+        expect(ScriptType.MARKETPLACE_CONTRACT).toBe('mkpl');
+        expect(ScriptType.DEMI_MINT).toBe('demimnt');
+        expect(ScriptType.HAL_MINT_PROXY).toBe('halmntprx');
     });
 });

@@ -1,20 +1,20 @@
 export enum ScriptType {
-    PZ_CONTRACT = 'pz_contract',
-    SUB_HANDLE_SETTINGS = 'sub_handle_settings',
-    MARKETPLACE_CONTRACT = 'marketplace_contract',
+    PZ_CONTRACT = 'pers',
+    SUB_HANDLE_SETTINGS = 'subh',
+    MARKETPLACE_CONTRACT = 'mkpl',
     // De-Mi
-    DEMI_MINT_PROXY = 'demi_mint_proxy',
-    DEMI_MINT = 'demi_mint',
-    DEMI_MINTING_DATA = 'demi_minting_data',
-    DEMI_ORDERS = 'demi_orders',
+    DEMI_MINT_PROXY = 'demimntprx',
+    DEMI_MINT = 'demimnt',
+    DEMI_MINTING_DATA = 'demimntmpt',
+    DEMI_ORDERS = 'demiord',
     // H.A.L. mint
-    HAL_MINT_PROXY = 'hal_mint_proxy',
-    HAL_MINT = 'hal_mint',
-    HAL_MINTING_DATA = 'hal_minting_data',
-    HAL_ORDERS_SPEND = 'hal_orders_spend',
-    HAL_REF_SPEND_PROXY = 'hal_ref_spend_proxy',
-    HAL_REF_SPEND = 'hal_ref_spend',
-    HAL_ROYALTY_SPEND = 'hal_royalty_spend'
+    HAL_MINT_PROXY = 'halmntprx',
+    HAL_MINT = 'halmnt',
+    HAL_MINTING_DATA = 'halmntmpt',
+    HAL_ORDERS_SPEND = 'halord',
+    HAL_REF_SPEND_PROXY = 'halrefprx',
+    HAL_REF_SPEND = 'halref',
+    HAL_ROYALTY_SPEND = 'halroy'
 }
 
 export interface ScriptDetails {
