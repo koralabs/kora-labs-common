@@ -19,7 +19,7 @@ jobs:
     - name: Publish ${{ github.workflow }}
       id: publish
       env:
-        DEPLOYMENT_ACCESS_TOKEN: ${{ secrets.DEPLOYMENT_ACCESS_TOKEN }}
+        DEPLOYMENT_ACCESS_TOKEN: ${{ secrets.github_token }}
         ADAHANDLE_DEPLOYMENTS_REF: master
         SECRETS_CONTEXT: ${{ toJson(secrets) }}
         VARS_CONTEXT: ${{ toJson(vars) }}
