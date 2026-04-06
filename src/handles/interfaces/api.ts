@@ -26,6 +26,7 @@ export enum LockedLambdaReason {
     ROLLBACK = 'ROLLBACK',
     ROLLBACK_2160 = 'ROLLBACK_2160',
     ROLLBACK_20 = 'ROLLBACK_20',
+    UTXO_IMPORT = 'UTXO_IMPORT',
     UNLOCKED = '',
 }
 
