@@ -247,6 +247,20 @@ export const getSlotNumberFromDate = (date: Date): number => {
     return (Math.floor(date.getTime() / 1000) - 1596491091) + 4924800;
 };
 
+export const addressHexToBech32 = (hex: string): string => {
+    const bytes = Uint8Array.from(Buffer.from(hex, 'hex'));
+    if (bytes.length === 0) return '';
+    const header = bytes[0];
+    const addressType = header >> 4;
+    const networkId = header & 0x0f;
+    const isTestnet = networkId === 0;
+    const isReward = addressType === 14 || addressType === 15;
+    const type: 'addr' | 'stake' = isReward ? 'stake' : 'addr';
+    const prefix = isTestnet && (type === 'addr' || type === 'stake') ? `${type}_test` : type;
+    const words = bech32.toWords(bytes);
+    return bech32.encode(prefix, words, 2048);
+};
+
 export const blake2b = (input: string | Buffer | Uint8Array, outlen = 32) => {
     if (typeof input == 'string') {
         input = Buffer.from(input, 'hex');
