@@ -191,4 +191,5 @@ export const buildUserIssueEventKey = (
 
 export { decodeCborToJson, encodeJsonToDatum, DefaultTextFormat as KeyType } from './cbor';
 
+export * from './cip8';
 export * from './crypto';
