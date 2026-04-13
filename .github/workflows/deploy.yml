@@ -38,7 +38,36 @@ jobs:
     - name: Publish to GitHub Packages
       run: |
         npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
-        cd ./lib && npm publish --@koralabs:registry='https://npm.pkg.github.com' || echo "GitHub Packages version may already exist"
+        publish_log=$(mktemp)
+        set +e
+        (cd ./lib && npm publish --@koralabs:registry='https://npm.pkg.github.com') >"${publish_log}" 2>&1
+        status=$?
+        set -e
+        cat "${publish_log}"
+        if [[ $status -ne 0 ]]; then
+          if grep -q "Cannot publish over existing version" "${publish_log}"; then
+            echo "GitHub Packages version already exists, continuing"
+          else
+            rm -f "${publish_log}"
+            exit $status
+          fi
+        fi
+        rm -f "${publish_log}"
 
     - name: Publish to npmjs
-      run: cd ./lib && npm publish --provenance --access public || echo "npmjs version may already exist"
+      run: |
+        publish_log=$(mktemp)
+        set +e
+        (cd ./lib && npm publish --provenance --access public) >"${publish_log}" 2>&1
+        status=$?
+        set -e
+        cat "${publish_log}"
+        if [[ $status -ne 0 ]]; then
+          if grep -q "You cannot publish over the previously published versions" "${publish_log}"; then
+            echo "npmjs version already exists, continuing"
+          else
+            rm -f "${publish_log}"
+            exit $status
+          fi
+        fi
+        rm -f "${publish_log}"
