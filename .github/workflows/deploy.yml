@@ -34,5 +34,10 @@ jobs:
     - name: Build
       run: npm run build && cp package.json ./lib/package.json
 
-    - name: Publish
+    - name: Publish to GitHub Packages
+      run: |
+        npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
+        cd ./lib && npm publish --@koralabs:registry='https://npm.pkg.github.com' || echo "GitHub Packages version may already exist"
+
+    - name: Publish to npmjs
       run: cd ./lib && npm publish --provenance --access public
