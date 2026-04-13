@@ -7,6 +7,7 @@ on:
 permissions:
   id-token: write  # Required for OIDC
   contents: read
+  packages: write  # Required for GitHub Packages publish
 jobs:
   deploy:
     name: Deploying from ${{ github.ref_name }}
@@ -40,4 +41,4 @@ jobs:
         cd ./lib && npm publish --@koralabs:registry='https://npm.pkg.github.com' || echo "GitHub Packages version may already exist"
 
     - name: Publish to npmjs
-      run: cd ./lib && npm publish --provenance --access public
+      run: cd ./lib && npm publish --provenance --access public || echo "npmjs version may already exist"
