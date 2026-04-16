@@ -1,4 +1,4 @@
-import { verifyCip30SignData } from '.';
+import { signCip30Data, verifyCip30SignData } from '.';
 
 // ---- Fixture generation ----
 // These fixtures were generated using @emurgo/cardano-message-signing-nodejs
@@ -85,5 +85,45 @@ describe('verifyCip30SignData', () => {
             fixture.addressHex
         );
         expect(result).toBe(false);
+    });
+});
+
+describe('signCip30Data', () => {
+    it('should produce a signature that verifyCip30SignData accepts', async () => {
+        const crypto = await import('crypto');
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+        const pubKeyRaw = publicKey.export({ type: 'spki', format: 'der' }).subarray(12);
+        const privKeyRaw = privateKey.export({ type: 'pkcs8', format: 'der' }).subarray(16);
+
+        const payloadText = 'test-request-id$myhandle';
+        const payloadHex = Buffer.from(payloadText).toString('hex');
+        const addressHex = '00bb';
+
+        const { signature, key } = await signCip30Data(
+            privKeyRaw.toString('hex'),
+            pubKeyRaw.toString('hex'),
+            payloadHex,
+            addressHex
+        );
+
+        const verified = await verifyCip30SignData(signature, key, payloadHex, addressHex);
+        expect(verified).toBe(true);
+    });
+
+    it('should fail verification with wrong payload', async () => {
+        const crypto = await import('crypto');
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+        const pubKeyRaw = publicKey.export({ type: 'spki', format: 'der' }).subarray(12);
+        const privKeyRaw = privateKey.export({ type: 'pkcs8', format: 'der' }).subarray(16);
+
+        const { signature, key } = await signCip30Data(
+            privKeyRaw.toString('hex'),
+            pubKeyRaw.toString('hex'),
+            Buffer.from('correct-payload').toString('hex'),
+            '00cc'
+        );
+
+        const verified = await verifyCip30SignData(signature, key, Buffer.from('wrong-payload').toString('hex'), '00cc');
+        expect(verified).toBe(false);
     });
 });
