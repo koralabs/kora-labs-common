@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.6.1",
+    "version": "6.6.2",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -49,8 +49,5 @@
         "crc": "^4.3.2",
         "libsodium-wrappers-sumo": "^0.8.3",
         "pluralize-esm": "^9.0.5"
-    },
-    "overrides": {
-        "minimatch": "10.2.2"
     }
 }
