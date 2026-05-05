@@ -146,11 +146,11 @@ export class Logger {
         context?: Record<string, unknown>
     ): void {
         const now = new Date().toISOString();
-        message = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); // escape double quotes and already escaped escapes
+        message = Logger.escapeJsonStringContent(message);
         const logCategory = category ?? LogCategory.INFO;
         const logCategoryColor = IS_LOCAL ? LOCAL_CATEGORY_COLORS[logCategory] : undefined;
         const displayCategory = logCategoryColor ? this.colorize(logCategory, logCategoryColor) : logCategory;
-        const log_event = event ? `, "event": "${event}"` : '';
+        const log_event = event ? `, "event": "${Logger.escapeJsonStringContent(event)}"` : '';
         const log_milliseconds =
             milliseconds != undefined && milliseconds != null ? `, "milliseconds": ${milliseconds}` : '';
         const log_count = count != undefined && count != null ? `, "count": ${count}` : '';
@@ -178,5 +178,33 @@ export class Logger {
 
     private static colorize(value: string, ansiColor: string): string {
         return `${ansiColor}${value}${ANSI_RESET}`;
+    }
+
+    // Escape characters that JSON forbids inside a string value: backslash,
+    // double quote, and control chars 0x00-0x1F. ESC (0x1B) is left alone so
+    // ANSI color sequences from `colorize`/`Logger.local` keep rendering on
+    // developer terminals; in production no ANSI is ever introduced, so the
+    // emitted line is valid JSON. Newlines/tabs in error stacks would otherwise
+    // produce invalid JSON that downstream consumers (CloudWatch subscribers,
+    // app-alerts ingestion) can't peel — the previous regex only handled \\ and
+    // \", letting stack traces through unescaped.
+    private static escapeJsonStringContent(s: string): string {
+        let out = '';
+        for (let i = 0; i < s.length; i++) {
+            const ch = s.charCodeAt(i);
+            if (ch === 0x5c) { out += '\\\\'; continue; }
+            if (ch === 0x22) { out += '\\"'; continue; }
+            if (ch === 0x08) { out += '\\b'; continue; }
+            if (ch === 0x09) { out += '\\t'; continue; }
+            if (ch === 0x0a) { out += '\\n'; continue; }
+            if (ch === 0x0c) { out += '\\f'; continue; }
+            if (ch === 0x0d) { out += '\\r'; continue; }
+            if (ch < 0x20 && ch !== 0x1b) {
+                out += '\\u' + ch.toString(16).padStart(4, '0');
+                continue;
+            }
+            out += s[i];
+        }
+        return out;
     }
 }

@@ -80,6 +80,27 @@ describe('Logger', () => {
         expect(`${entry}`).not.toContain('"application": "undefined"');
     });
 
+    it('escapes newlines/tabs in message and event so the emitted line is valid JSON', async () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const { Logger, LogCategory } = await resetLoggerModule(false);
+
+        const stack = 'TypeError: fetch failed\n    at tryFetch (file://x.js:1:1)\n    at done (file://y.js:2:2)';
+        Logger.log({
+            message: `[POST] / >> StatusCode:: 500, Stack: ${stack}`,
+            category: LogCategory.ERROR,
+            event: 'http.exception'
+        });
+
+        const [entry] = errorSpy.mock.calls[0];
+        const line = `${entry}`;
+        // The emitted line MUST be valid JSON (no literal control chars in any string value).
+        expect(() => JSON.parse(line)).not.toThrow();
+        const parsed = JSON.parse(line);
+        // The inner message field is itself JSON-shaped; in CloudWatch consumers it gets
+        // peeled a second time, so it must also parse cleanly.
+        expect(parsed.message).toContain('TypeError: fetch failed\n    at tryFetch');
+    });
+
     it('serializes USER_ISSUE category logs with event and context payload', async () => {
         const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
         const { Logger, LogCategory } = await resetLoggerModule(false);
