@@ -15,6 +15,7 @@ npm test > "$TMP_DIR/npm.test.log" 2>&1
 
 NETWORK=mainnet node --experimental-vm-modules node_modules/.bin/jest \
   --coverage \
+  --collectCoverageFrom='src/handles/api.ts' \
   --collectCoverageFrom='src/handles/interfaces/index.ts' \
   --collectCoverageFrom='src/types/index.ts' \
   --collectCoverageFrom='src/types/profile-header.ts' \
@@ -58,8 +59,8 @@ fi
   echo "TOTAL_LINES_PCT=$LINE_COVERAGE"
   echo "TOTAL_BRANCHES_PCT=$BRANCH_COVERAGE"
   echo "STATUS=$STATUS"
-  echo "SOURCE_PATHS=src/constants/{contractsRegistry.ts,mintedOgList.ts};src/errors/index.ts;src/handles/interfaces/index.ts;src/types/{index.ts,profile-header.ts};src/utils/cbor/schema/{designer.ts,handleData.ts,marketplaceDatum.ts,portal.ts,socials.ts,subHandleSettings.ts}"
-  echo "EXCLUDED_PATHS=src/{environment/**,http/**,logger/**,marketplace/**,repositories/**,protectedWords/**}:covered-by-existing-unit-suites-but-not-in-guardrail-branch-threshold-scope; src/handles/{api.ts,index.ts,UTxO.ts,constants.ts,policies.ts,models/**,interfaces/{api.ts,ScriptDetails.ts}}:runtime-and-model-surfaces-covered-by-unit-suites-with-open-branch-gap-follow-ups; src/utils/{index.ts,crypto/**,common.ts,contract.ts,cbor/index.ts}:broader-runtime-helpers-covered-by-unit-suites-with-open-branch-gap-follow-ups; src/index.ts:package-entry-surface-not-branch-measured"
+  echo "SOURCE_PATHS=src/constants/{contractsRegistry.ts,mintedOgList.ts};src/errors/index.ts;src/handles/{api.ts,interfaces/index.ts};src/types/{index.ts,profile-header.ts};src/utils/cbor/schema/{designer.ts,handleData.ts,marketplaceDatum.ts,portal.ts,socials.ts,subHandleSettings.ts}"
+  echo "EXCLUDED_PATHS=src/{environment/**,http/**,logger/**,marketplace/**,repositories/**,protectedWords/**}:covered-by-existing-unit-suites-but-not-in-guardrail-branch-threshold-scope; src/handles/{index.ts,UTxO.ts,constants.ts,policies.ts,models/**,interfaces/{api.ts,ScriptDetails.ts}}:runtime-and-model-surfaces-covered-by-unit-suites-with-open-branch-gap-follow-ups; src/utils/{index.ts,crypto/**,common.ts,contract.ts,cbor/index.ts}:broader-runtime-helpers-covered-by-unit-suites-with-open-branch-gap-follow-ups; src/index.ts:package-entry-surface-not-branch-measured"
   echo "LANGUAGE_SUMMARY=nodejs:lines=$LINE_COVERAGE,branches=$BRANCH_COVERAGE,tool=jest,status=$LANGUAGE_STATUS"
   echo
   echo "=== RAW_OUTPUT_NPM_TEST ==="
