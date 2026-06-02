@@ -2,6 +2,7 @@ export * from './constants';
 export * from './aws';
 export { ComputeEnvironment, Environment } from './environment';
 export * from './errors';
+export * from './fn';
 export * from './handles';
 export * from './http';
 export { LogCategory, Logger } from './logger';
