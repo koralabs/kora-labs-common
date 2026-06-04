@@ -2,6 +2,16 @@ import { DecryptCommand, KMSClient } from '@aws-sdk/client-kms';
 
 export type KmsClientLike = Pick<KMSClient, 'send'>;
 const KMS_ENV_BUNDLE_KEY = 'KMS_ENV_BUNDLE_ENC';
+const KMS_DISABLED_KEY = 'KORA_KMS_DISABLED';
+
+/**
+ * True when AWS KMS is intentionally disabled. On the self-hosted deployment there is no
+ * KMS — the environment is decrypted at DEPLOY time by SOPS/age (the bootstrap) and handed
+ * to the process as plaintext, so there is nothing to decrypt at runtime. Set
+ * KORA_KMS_DISABLED=true there. Legacy AWS deploys leave it unset and keep using KMS.
+ */
+export const isKmsDisabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
+    env[KMS_DISABLED_KEY] === 'true' || env[KMS_DISABLED_KEY] === '1';
 
 export async function decryptKmsCiphertext(
     ciphertext: string,
@@ -20,18 +30,41 @@ export async function decryptKmsCiphertext(
 
 export async function hydrateKmsEnvironment({
     env = process.env,
-    client = new KMSClient({}),
+    client,
     keys
 }: {
     env?: NodeJS.ProcessEnv;
     client?: KmsClientLike;
     keys?: string[];
 } = {}): Promise<string[]> {
+    // Self-host: SOPS/age decrypts the env at deploy time, so the values are already
+    // plaintext and there is no KMS to call. Skip decryption entirely (don't even
+    // construct a KMS client). Warn — but don't fail — if a *_ENC ciphertext (or the
+    // bundle) is present without its plaintext counterpart: that means an encrypted value
+    // was left in the env instead of supplying the decrypted one via SOPS.
+    if (isKmsDisabled(env)) {
+        const undecrypted = [
+            ...(env[KMS_ENV_BUNDLE_KEY] ? [KMS_ENV_BUNDLE_KEY] : []),
+            ...Object.keys(env).filter(
+                (k) => k.endsWith('_ENC') && k !== KMS_ENV_BUNDLE_KEY && !env[k.slice(0, -4)]
+            )
+        ];
+        if (undecrypted.length) {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `[kmsEnvironment] ${KMS_DISABLED_KEY} set — skipping AWS KMS; supply decrypted ` +
+                `values via SOPS at deploy. Left undecrypted: ${undecrypted.join(', ')}`
+            );
+        }
+        return [];
+    }
+
     const hydratedKeys: string[] = [];
+    const kms = client ?? new KMSClient({});
     const bundleCiphertext = env[KMS_ENV_BUNDLE_KEY];
 
     if (bundleCiphertext) {
-        const plaintext = await decryptKmsCiphertext(bundleCiphertext, client);
+        const plaintext = await decryptKmsCiphertext(bundleCiphertext, kms);
         let bundle: unknown;
         try {
             bundle = JSON.parse(plaintext);
@@ -68,7 +101,7 @@ export async function hydrateKmsEnvironment({
         if (!ciphertext) {
             continue;
         }
-        env[key] = await decryptKmsCiphertext(ciphertext, client);
+        env[key] = await decryptKmsCiphertext(ciphertext, kms);
         hydratedKeys.push(key);
     }
 

@@ -1,4 +1,4 @@
-import { decryptKmsCiphertext, hydrateKmsEnvironment, loadAfterHydratingKmsEnvironment } from './kmsEnvironment';
+import { decryptKmsCiphertext, hydrateKmsEnvironment, isKmsDisabled, loadAfterHydratingKmsEnvironment } from './kmsEnvironment';
 
 describe('kmsEnvironment', () => {
     it('hydrates missing environment values from matching *_ENC keys', async () => {
@@ -101,4 +101,27 @@ describe('kmsEnvironment', () => {
         expect(loaded).toEqual({ apiKey: 'decoded-secret' });
         expect(send).toHaveBeenCalledTimes(1);
     });
+
+    it('skips KMS entirely when KORA_KMS_DISABLED is set (self-host SOPS env)', async () => {
+        const send = jest.fn();
+        const env = {
+            KORA_KMS_DISABLED: 'true',
+            API_KEY: 'from-sops',
+            KMS_ENV_BUNDLE_ENC: Buffer.from('ignored').toString('base64'),
+            OTHER_ENC: Buffer.from('ignored').toString('base64'),
+        } as NodeJS.ProcessEnv;
+
+        const hydrated = await hydrateKmsEnvironment({ env, client: { send } as any });
+
+        expect(hydrated).toEqual([]);
+        expect(send).not.toHaveBeenCalled();
+        expect(env.API_KEY).toBe('from-sops');
+    });
+
+    it('isKmsDisabled reads the KORA_KMS_DISABLED flag', () => {
+        expect(isKmsDisabled({ KORA_KMS_DISABLED: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+        expect(isKmsDisabled({ KORA_KMS_DISABLED: '1' } as NodeJS.ProcessEnv)).toBe(true);
+        expect(isKmsDisabled({} as NodeJS.ProcessEnv)).toBe(false);
+    });
+
 });
