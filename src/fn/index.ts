@@ -87,15 +87,30 @@ export const invokeExpressViaAlb = async (
         ? Buffer.alloc(0)
         : Buffer.isBuffer(input) ? input : Buffer.from(input as Uint8Array);
 
+    const headers = flattenHeaders(h.headers);
+    // Mirror ALB body semantics: ALB delivers TEXT content-types as a raw UTF-8 string
+    // (isBase64Encoded=false) and only BINARY as base64. Handlers written for ALB read text
+    // bodies directly (e.g. JSON.parse(event.body)) and only base64-decode when isBase64Encoded
+    // is true. Unconditional base64 here broke every JSON/text POST (the handler JSON.parsed the
+    // base64 string and threw -> 500). Treat text/*, json, xml, x-www-form-urlencoded, javascript
+    // and the no-content-type default as text; everything else (images, multipart, octet-stream)
+    // as binary.
+    const ctype = String(
+        Object.entries(headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1] ?? ''
+    ).toLowerCase();
+    const isBinaryBody = ctype !== '' &&
+        !/^text\//.test(ctype) &&
+        !/(json|xml|x-www-form-urlencoded|javascript|graphql)/.test(ctype);
+
     const event: AlbEvent = {
         requestContext: { elb: { targetGroupArn: 'arn:kora:fn' } }, // marks this as an ALB event
         httpMethod: h.method,
         path: url.pathname,
         queryStringParameters: Object.keys(qs).length ? qs : null,
         multiValueQueryStringParameters: Object.keys(mqs).length ? mqs : null,
-        headers: flattenHeaders(h.headers),
-        body: bodyBuf.length ? bodyBuf.toString('base64') : null,
-        isBase64Encoded: true
+        headers,
+        body: bodyBuf.length ? (isBinaryBody ? bodyBuf.toString('base64') : bodyBuf.toString('utf8')) : null,
+        isBase64Encoded: bodyBuf.length > 0 && isBinaryBody
     };
 
     const res: AlbResult = (await albHandler(event, {})) || {};
