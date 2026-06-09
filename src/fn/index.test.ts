@@ -44,15 +44,33 @@ describe('invokeExpressViaAlb (Fn <-> ALB bridge)', () => {
         expect(body).toBe(JSON.stringify({ ok: true }));
     });
 
-    it('round-trips a base64 (binary) request body to the handler and decodes a base64 response', async () => {
-        const handler: AlbHandler = (event) => ({
-            statusCode: 200,
-            // echo the decoded request body back, base64-encoded
-            body: Buffer.from(event.body!, 'base64').toString('utf-8'),
-            isBase64Encoded: false
-        });
-        const { ctx } = makeCtx('/echo', 'POST');
+    it('delivers a TEXT request body RAW (isBase64Encoded=false), like ALB — JSON.parse(event.body) works', async () => {
+        // Regression: the bridge used to always base64-encode the body, so a handler that read the
+        // body directly (JSON.parse(event.body)) parsed a base64 string and threw -> 500.
+        let seen: any;
+        const handler: AlbHandler = (event) => {
+            seen = event;
+            const parsed = JSON.parse(event.body!);
+            return { statusCode: 200, body: JSON.stringify({ got: parsed.x }), isBase64Encoded: false };
+        };
+        const { ctx } = makeCtx('/echo', 'POST', { 'content-type': 'application/json' });
+        const body = await invokeExpressViaAlb(handler, ctx, Buffer.from(JSON.stringify({ x: 42 }), 'utf-8'));
+        expect(seen.isBase64Encoded).toBe(false);
+        expect(seen.body).toBe(JSON.stringify({ x: 42 }));
+        expect(body).toBe(JSON.stringify({ got: 42 }));
+    });
+
+    it('delivers a BINARY request body base64-encoded (isBase64Encoded=true), like ALB', async () => {
+        let seen: any;
+        const handler: AlbHandler = (event) => {
+            seen = event;
+            // echo the decoded request body back
+            return { statusCode: 200, body: Buffer.from(event.body!, 'base64').toString('utf-8'), isBase64Encoded: false };
+        };
+        const { ctx } = makeCtx('/echo', 'POST', { 'content-type': 'application/octet-stream' });
         const body = await invokeExpressViaAlb(handler, ctx, Buffer.from('hello-fn', 'utf-8'));
+        expect(seen.isBase64Encoded).toBe(true);
+        expect(seen.body).toBe(Buffer.from('hello-fn').toString('base64'));
         expect(body).toBe('hello-fn');
     });
 
