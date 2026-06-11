@@ -544,3 +544,5 @@ export type MintHandleSettings = [
     MintHandleSettingsAsset[], // assets
     MintHandleSettingsDetails
 ];
+
+export * from './WalletHandle';
