@@ -1,6 +1,6 @@
 FORMAT_VERSION=1
 REPO=kora-labs-common
-TIMESTAMP_UTC=2026-05-16T13:04:44Z
+TIMESTAMP_UTC=2026-06-17T05:59:12Z
 THRESHOLD_LINES=90
 THRESHOLD_BRANCHES=90
 TOTAL_LINES_PCT=100
@@ -12,63 +12,81 @@ LANGUAGE_SUMMARY=nodejs:lines=100,branches=100,tool=jest,status=pass
 
 === RAW_OUTPUT_NPM_TEST ===
 
-> @koralabs/kora-labs-common@6.6.2 test
+> @koralabs/kora-labs-common@6.7.7 test
 > NETWORK=mainnet node --experimental-vm-modules node_modules/.bin/jest
 
-(node:1895661) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895716) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895715) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895717) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895718) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895739) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-PASS src/http/index.test.ts
-PASS src/utils/index.test.ts
-PASS src/handles/api.test.ts
-PASS src/utils/crypto/crypto.test.ts
-PASS src/handles/utils.test.ts
-PASS src/utils/cip8/index.test.ts
+PASS src/handles/interfaces/api.test.ts
+PASS src/constants/index.test.ts
 PASS src/utils/cbor/index.test.ts
 PASS src/aws/kmsEnvironment.test.ts
-PASS src/errors/index.test.ts
-PASS src/logger/index.test.ts
-PASS src/protectedWords/index.test.ts (7.24 s)
+  ● Console
 
-Test Suites: 11 passed, 11 total
-Tests:       99 passed, 99 total
+    console.warn
+      [kmsEnvironment] KORA_KMS_DISABLED set — skipping AWS KMS; supply decrypted values via SOPS at deploy. Left undecrypted: KMS_ENV_BUNDLE_ENC, OTHER_ENC
+
+      52 |         if (undecrypted.length) {
+      53 |             // eslint-disable-next-line no-console
+    > 54 |             console.warn(
+         |                     ^
+      55 |                 `[kmsEnvironment] ${KMS_DISABLED_KEY} set — skipping AWS KMS; supply decrypted ` +
+      56 |                 `values via SOPS at deploy. Left undecrypted: ${undecrypted.join(', ')}`
+      57 |             );
+
+      at hydrateKmsEnvironment (src/aws/kmsEnvironment.ts:54:21)
+      at Object.<anonymous> (src/aws/kmsEnvironment.test.ts:114:53)
+
+PASS src/utils/crypto/crypto.test.ts
+PASS src/aws/jwtSigner.test.ts
+PASS src/utils/index.test.ts
+PASS src/utils/cip8/index.test.ts
+PASS src/handles/utils.test.ts
+PASS src/handles/api.test.ts
+PASS src/logger/index.test.ts
+PASS src/aws/objectStore.test.ts
+PASS src/errors/index.test.ts
+PASS src/fn/index.test.ts
+PASS src/http/index.test.ts
+PASS src/protectedWords/index.test.ts (8.402 s)
+
+Test Suites: 16 passed, 16 total
+Tests:       122 passed, 122 total
 Snapshots:   0 total
-Time:        7.448 s, estimated 8 s
+Time:        8.916 s, estimated 9 s
 Ran all test suites.
 
 === RAW_OUTPUT_JEST_COVERAGE ===
-(node:1895787) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895866) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895879) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895865) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895867) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:1895873) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-PASS src/http/index.test.ts
-PASS src/handles/api.test.ts
-PASS src/aws/kmsEnvironment.test.ts
-PASS src/utils/cbor/index.test.ts
 PASS src/utils/crypto/crypto.test.ts
-PASS src/utils/cip8/index.test.ts
-PASS src/logger/index.test.ts
-PASS src/errors/index.test.ts
+PASS src/utils/cbor/index.test.ts
+PASS src/aws/jwtSigner.test.ts
+PASS src/aws/kmsEnvironment.test.ts
+  ● Console
+
+    console.warn
+      [kmsEnvironment] KORA_KMS_DISABLED set — skipping AWS KMS; supply decrypted values via SOPS at deploy. Left undecrypted: KMS_ENV_BUNDLE_ENC, OTHER_ENC
+
+      52 |         if (undecrypted.length) {
+      53 |             // eslint-disable-next-line no-console
+    > 54 |             console.warn(
+         |                     ^
+      55 |                 `[kmsEnvironment] ${KMS_DISABLED_KEY} set — skipping AWS KMS; supply decrypted ` +
+      56 |                 `values via SOPS at deploy. Left undecrypted: ${undecrypted.join(', ')}`
+      57 |             );
+
+      at hydrateKmsEnvironment (src/aws/kmsEnvironment.ts:54:21)
+      at Object.<anonymous> (src/aws/kmsEnvironment.test.ts:114:53)
+
 PASS src/utils/index.test.ts
 PASS src/handles/utils.test.ts
-PASS src/protectedWords/index.test.ts (8.031 s)
+PASS src/handles/api.test.ts
+PASS src/logger/index.test.ts
+PASS src/utils/cip8/index.test.ts
+PASS src/aws/objectStore.test.ts
+PASS src/fn/index.test.ts
+PASS src/http/index.test.ts
+PASS src/errors/index.test.ts
+PASS src/handles/interfaces/api.test.ts (5.541 s)
+PASS src/constants/index.test.ts (5.665 s)
+PASS src/protectedWords/index.test.ts (8.991 s)
 -----------------------|---------|----------|---------|---------|-------------------
 File                   | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
 -----------------------|---------|----------|---------|---------|-------------------
@@ -94,8 +112,8 @@ All files              |     100 |      100 |     100 |     100 |
   subHandleSettings.ts |     100 |      100 |     100 |     100 |                   
 -----------------------|---------|----------|---------|---------|-------------------
 
-Test Suites: 11 passed, 11 total
-Tests:       99 passed, 99 total
+Test Suites: 16 passed, 16 total
+Tests:       122 passed, 122 total
 Snapshots:   0 total
-Time:        8.335 s
+Time:        9.681 s
 Ran all test suites.
