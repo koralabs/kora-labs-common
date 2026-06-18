@@ -8,8 +8,15 @@ export const RESPONSE_INVALID_HANDLE_FORMAT = 'Invalid handle. Only a-z, 0-9, da
 export const RESPONSE_NOT_ALLOWED = 'Sorry, that handle is not allowed.';
 export const REGEX_SPLIT_ON_CHARS = /([0-9a-z]+)[@_.-]*/g;
 export const REGEX_SPLIT_ON_NUMS = /([a-z]+)[0-9]*/g;
-export const REGEX_HANDLE = new RegExp(/^[a-zA-Z0-9_.-]{1,28}$/);
-export const REGEX_SUB_HANDLE = new RegExp(/(?:^[a-z0-9_.-]{1,28}$)|(?:^(?!.{29})[a-z0-9_.-]+@[a-z0-9_.-]{1,28}$)/g);
+// Single canonical handle/subhandle format. Lowercase a-z, digits, and _ . - only;
+// a root handle is 1-28 chars, or `sub@root` with a TOTAL length of 3-28. This regex is
+// the ONLY charset gate — the on-chain DeMi/legacy validators enforce LENGTH, not charset.
+// No `g` flag: a global regex makes `.test()` stateful (lastIndex), which flips results
+// across calls.
+export const REGEX_HANDLE_OR_SUB_HANDLE = /^(?:[0-9a-z_.-]{1,28}|(?=.{3,28}$)[0-9a-z_.-]+@[0-9a-z_.-]+)$/;
+// Back-compat aliases — both names now resolve to the one unified pattern (handles + subhandles).
+export const REGEX_HANDLE = REGEX_HANDLE_OR_SUB_HANDLE;
+export const REGEX_SUB_HANDLE = REGEX_HANDLE_OR_SUB_HANDLE;
 export const HANDLES_API_KEY = IS_PRODUCTION ? process.env.HANDLES_API_KEY ?? process.env.HANDLE_ME_API_KEY ?? '' : ''
 export const KORA_USER_AGENT = process.env.KORA_USER_AGENT ?? ''
 
