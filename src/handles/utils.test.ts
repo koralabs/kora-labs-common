@@ -18,6 +18,18 @@ describe('validation tests', () => {
         const result = checkHandlePattern('aaaaaaaaaaaaaaaaaaaaaaaaa@tt');
         expect(result).toEqual({ message: 'Yay! This handle is available.', valid: true });
     });
+    it('should accept a 16-char root handle (>15, new 28-char cap)', () => {
+        const result = checkHandlePattern('sixteencharsname');
+        expect(result).toEqual({ message: 'Yay! This handle is available.', valid: true });
+    });
+    it('should accept a 28-char root handle (the new cap)', () => {
+        const result = checkHandlePattern('twentyeightcharhandlename123');
+        expect(result.valid).toBe(true);
+    });
+    it('should reject a 29-char root handle (over the 28 cap)', () => {
+        const result = checkHandlePattern('twentyninecharhandlename12345');
+        expect(result.valid).toBe(false);
+    });
 });
 
 describe('buildMetadata', () => {

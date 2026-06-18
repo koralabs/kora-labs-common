@@ -8,8 +8,8 @@ export const RESPONSE_INVALID_HANDLE_FORMAT = 'Invalid handle. Only a-z, 0-9, da
 export const RESPONSE_NOT_ALLOWED = 'Sorry, that handle is not allowed.';
 export const REGEX_SPLIT_ON_CHARS = /([0-9a-z]+)[@_.-]*/g;
 export const REGEX_SPLIT_ON_NUMS = /([a-z]+)[0-9]*/g;
-export const REGEX_HANDLE = new RegExp(/^[a-zA-Z0-9_.-]{1,15}$/);
-export const REGEX_SUB_HANDLE = new RegExp(/(?:^[a-z0-9_.-]{1,15}$)|(?:^(?!.{29})[a-z0-9_.-]+@[a-z0-9_.-]{1,15}$)/g);
+export const REGEX_HANDLE = new RegExp(/^[a-zA-Z0-9_.-]{1,28}$/);
+export const REGEX_SUB_HANDLE = new RegExp(/(?:^[a-z0-9_.-]{1,28}$)|(?:^(?!.{29})[a-z0-9_.-]+@[a-z0-9_.-]{1,28}$)/g);
 export const HANDLES_API_KEY = IS_PRODUCTION ? process.env.HANDLES_API_KEY ?? process.env.HANDLE_ME_API_KEY ?? '' : ''
 export const KORA_USER_AGENT = process.env.KORA_USER_AGENT ?? ''
 
