@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import { md5 } from 'js-md5';
 import { IS_PRODUCTION } from '../constants';
 import { bech32FromHex, decodeAddress } from '../utils';
 import { REGEX_SUB_HANDLE, RESPONSE_AVAILABLE, RESPONSE_INVALID_HANDLE_FORMAT, RESPONSE_UNAVAILABLE_LEGENDARY } from './constants';
@@ -127,7 +127,7 @@ export const buildDrep = (address: string, id_hash?: string): IDrep | undefined 
     if (!id_hash) return undefined;
     const decoded = decodeAddress(address)?.slice(2, 58);
     if (!decoded || decoded == '') return undefined;
-    const hashed = crypto.createHash('md5').update(Buffer.from(decoded, 'hex')).digest('hex')
+    const hashed = md5(Buffer.from(decoded, 'hex'))
     if (!id_hash.startsWith(hashed)) return undefined;
 
     const typeByte = id_hash.slice(32, 34);

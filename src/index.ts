@@ -1,5 +1,7 @@
 export * from './constants';
-export * from './aws';
+// NOTE: './aws' (KMS + JWT signing) is intentionally NOT re-exported here — it pulls Node-only
+// deps (@aws-sdk/client-kms, node:crypto) that break browser bundles. It is server-only; import it
+// directly from the subpath: `@koralabs/kora-labs-common/aws`. This keeps the root index isomorphic.
 export { ComputeEnvironment, Environment } from './environment';
 export * from './errors';
 export * from './fn';

@@ -191,5 +191,7 @@ export const buildUserIssueEventKey = (
 
 export { decodeCborToJson, encodeJsonToDatum, DefaultTextFormat as KeyType } from './cbor';
 
-export * from './cip8';
+// NOTE: './cip8' (CIP-30 signData via @emurgo/cardano-message-signing-nodejs WASM + node:crypto)
+// was removed from kora-labs-common — its only consumer was auth.handle.me, which now owns it. It
+// is a heavy Node-only signer that should never reach an isomorphic package's surface.
 export * from './crypto';

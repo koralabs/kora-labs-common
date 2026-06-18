@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.7.9",
+    "version": "6.8.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -40,13 +40,13 @@
     },
     "dependencies": {
         "@aws-sdk/client-kms": "^3.1003.0",
-        "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
         "bech32": "^2.0.0",
         "blakejs": "^1.2.1",
         "boolean": "^3.2.0",
         "bs58": "^6.0.0",
         "cbor": "^9.0.2",
         "crc": "^4.3.2",
+        "js-md5": "^0.8.3",
         "libsodium-wrappers-sumo": "^0.8.3",
         "pluralize-esm": "^9.0.5"
     },
