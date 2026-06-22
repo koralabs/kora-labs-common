@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.8.1",
+    "version": "6.9.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -37,6 +37,7 @@
     "author": "",
     "license": "ISC",
     "devDependencies": {
+        "@aiken-lang/merkle-patricia-forestry": "^1.2.0",
         "@aws-sdk/client-dynamodb": "^3.549.0",
         "@aws-sdk/lib-dynamodb": "^3.549.0",
         "@types/jest": "^30.0.0",
@@ -63,5 +64,13 @@
     },
     "overrides": {
         "js-yaml": "^4.2.0"
+    },
+    "peerDependencies": {
+        "@aiken-lang/merkle-patricia-forestry": "^1.2.0"
+    },
+    "peerDependenciesMeta": {
+        "@aiken-lang/merkle-patricia-forestry": {
+            "optional": true
+        }
     }
 }
