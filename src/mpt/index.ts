@@ -5,9 +5,8 @@
 import { Trie } from '@aiken-lang/merkle-patricia-forestry';
 
 import * as labelSet from './labelSet';
-import * as registryValue from './registryValue';
 
-export { labelSet, registryValue };
+export { labelSet };
 // Re-export Trie so consumers get the MPF type/class from the same single source.
 export { Trie };
 
@@ -15,17 +14,14 @@ const EMPTY_ROOT_HEX = Buffer.alloc(32).toString('hex');
 
 /**
  * A minting-data MPT entry. A bare string is shorthand for a handle with no registry value
- * (value = ""). The object form carries the registry value the on-chain validator stores at the
- * key: `registryValue.encode(freeNames, labels)`.
- *   - `freeNames`: a ROOT's currently-claimed FREE private-virtual sub names (the free-virtual
- *     allowance). The DeMi free-virtual mint/burn path writes this into the root key's value, so it
- *     MUST be supplied or the off-chain root drifts from chain on every root holding a free virtual.
- *   - `labels`: the sorted CIP-67 label set (001-004). The in-band `MintLabelAssets` path is NOT
- *     yet deployed on-chain, so callers pass "" today; flip to the real label set when it ships.
+ * (value = ""). The object form carries the key's on-chain value — the sorted CIP-67 label set
+ * (001-004) bytes. (The 3-free-virtual feature was removed, so keys no longer carry a free-name
+ * value; the only non-empty value is the label set, once the in-band MintLabelAssets path ships.)
  */
 export interface MintingDataEntry {
     name: string;
-    freeNames?: string[];
+    /** Sorted CIP-67 label set (001-004) hex. Empty/absent => value "". The in-band MintLabelAssets
+     * path is not on-chain yet, so callers pass "" today; flip to the real set when it ships. */
     labels?: string;
 }
 
@@ -36,10 +32,10 @@ type MintingDataInput = ReadonlyArray<string | MintingDataEntry>;
  * Consumers that only need the root hash should use {@link computeMintingDataRoot}; consumers that
  * generate proofs (the minting engine's verifyRootHash) keep the returned Trie.
  *
- * The value at each key is `registryValue.encode(freeNames, labels)` — byte-identical to what the
+ * The value at each key is the sorted label-set bytes (CIP-67 001-004), byte-identical to what the
  * on-chain `demimntmpt` validator stores (`mpt.update` verifies the old bytes). A handle with no
- * free names and no labels encodes to "" (the legacy `update_root` `mpt.insert(root, name, #"")`
- * case), so passing bare strings reproduces the empty-valued root exactly.
+ * labels => value "" (the `update_root` `mpt.insert(root, name, #"")` case), so passing bare strings
+ * reproduces the empty-valued root exactly — which is every key today (labels not yet on-chain).
  */
 export const buildMintingDataTrie = async (handles: MintingDataInput): Promise<Trie> => {
     const seen = new Set<string>();
@@ -48,12 +44,11 @@ export const buildMintingDataTrie = async (handles: MintingDataInput): Promise<T
         const name = typeof handle === 'string' ? handle : handle.name;
         if (!name || seen.has(name)) continue;
         seen.add(name);
-        const freeNames = typeof handle === 'string' ? [] : handle.freeNames ?? [];
         const labels = typeof handle === 'string' ? '' : handle.labels ?? '';
-        const encoded = registryValue.encode(freeNames, labels);
-        // MPF treats string values as UTF-8; supply the decoded bytes for a non-empty registry
-        // value, and "" (an empty value) for the common no-registry case.
-        entries.push({ key: name, value: encoded ? Buffer.from(encoded, 'hex') : '' });
+        // The key's value is the sorted label-set bytes (CIP-67 001-004), or "" when it holds none.
+        // The 3-free-virtual feature was removed, so no key carries a free-name value any more.
+        // MPF treats string values as UTF-8; supply decoded bytes for a non-empty label set.
+        entries.push({ key: name, value: labels ? Buffer.from(labels, 'hex') : '' });
     }
     return Trie.fromList(entries);
 };
