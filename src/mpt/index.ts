@@ -8,8 +8,21 @@ import * as labelSet from './labelSet';
 import * as registryValue from './registryValue';
 
 export { labelSet, registryValue };
+// Re-export Trie so consumers get the MPF type/class from the same single source.
+export { Trie };
 
 const EMPTY_ROOT_HEX = Buffer.alloc(32).toString('hex');
+
+/**
+ * THE canonical minting-data MPT (a real {@link Trie}, for proof generation during mint/burn).
+ * Consumers that only need the root hash should use {@link computeMintingDataRoot}; consumers that
+ * generate proofs (the minting engine's verifyRootHash) keep the returned Trie. Value = "" per the
+ * validator's `update_root` — see {@link computeMintingDataRoot} for the full rationale.
+ */
+export const buildMintingDataTrie = async (handleNames: string[]): Promise<Trie> => {
+    const uniqueKeys = Array.from(new Set(handleNames));
+    return Trie.fromList(uniqueKeys.map((key) => ({ key, value: '' })));
+};
 
 /**
  * THE canonical minting-data MPT root. Every Node service (api.handle.me, the minting engine,
@@ -28,7 +41,6 @@ const EMPTY_ROOT_HEX = Buffer.alloc(32).toString('hex');
  * duplicate keys are de-duped to avoid a Trie insert throw.
  */
 export const computeMintingDataRoot = async (handleNames: string[]): Promise<string> => {
-    const uniqueKeys = Array.from(new Set(handleNames));
-    const trie = await Trie.fromList(uniqueKeys.map((key) => ({ key, value: '' })));
+    const trie = await buildMintingDataTrie(handleNames);
     return trie.hash?.toString('hex') ?? EMPTY_ROOT_HEX;
 };
