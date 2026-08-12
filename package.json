@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.9.4",
+    "version": "6.9.5",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -43,12 +43,12 @@
         "@types/jest": "^30.0.0",
         "@types/node": "^22.15.17",
         "@types/pluralize": "^0.0.29",
-        "@typescript-eslint/eslint-plugin": "^7.6.0",
-        "@typescript-eslint/parser": "^7.6.0",
-        "eslint": "^8.57.0",
+        "@typescript-eslint/eslint-plugin": "^8.67.0",
+        "@typescript-eslint/parser": "^8.67.0",
+        "eslint": "^10.8.1",
         "jest": "^30.4.2",
         "ts-jest": "^29.4.11",
-        "typescript": "^4.7.3"
+        "typescript": "^5.9.3"
     },
     "dependencies": {
         "@aws-sdk/client-kms": "^3.1003.0",
@@ -63,8 +63,8 @@
         "pluralize-esm": "^9.0.5"
     },
     "overrides": {
-        "js-yaml": "4.3.0",
-        "brace-expansion": "5.0.8"
+        "js-yaml": "4.3.1",
+        "brace-expansion": "5.0.9"
     },
     "peerDependencies": {
         "@aiken-lang/merkle-patricia-forestry": "^1.2.0"
