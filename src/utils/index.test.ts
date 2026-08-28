@@ -1,14 +1,31 @@
 import { AssetNameLabel } from '../types';
 import {
+    asyncForEach,
+    awaitForEach,
     buildUserIssueEventKey,
     checkNameLabel,
+    chunk,
     createUserIssueTrackingId,
+    diff,
     getDateFromSlot,
     getElapsedTime,
     getSlotNumberFromDate,
+    hasOwnProperty,
+    isAlphaNumeric,
+    isDate,
+    isEmpty,
+    isEmptyObject,
+    isNullEmptyOrUndefined,
     isNumeric,
+    isObject,
     isUserIssueTrackingId,
-    normalizeUserIssueEventSegment
+    makeObjectWithoutPrototype,
+    mapNoKeysStringifyReplacer,
+    mapStringifyReplacer,
+    normalizeUserIssueEventSegment,
+    objectHasKeys,
+    toADA,
+    toLovelace
 } from './';
 
 describe('Utils Tests', () => {
@@ -133,6 +150,136 @@ describe('Utils Tests', () => {
             expect(buildUserIssueEventKey('', 'mint', '!!!', 'submit-tx')).toEqual(
                 'user_issue.unknown.mint.unknown.submit_tx'
             );
+        });
+    });
+
+    describe('numeric conversions and collection helpers', () => {
+        it('converts between ADA and lovelace', () => {
+            expect(toLovelace(1.5)).toEqual(1500000);
+            expect(toADA(2500000)).toEqual(2.5);
+        });
+
+        it('chunks arrays while preserving item order and trailing partial chunks', () => {
+            expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+            expect(chunk([], 3)).toEqual([]);
+        });
+
+        it('awaits each callback in sequence', async () => {
+            const source = ['a', 'b', 'c'];
+            const calls: string[] = [];
+            await awaitForEach(source, async (item, index, array) => {
+                calls.push(index + ':' + item + ':' + (array === source));
+            });
+
+            expect(calls).toEqual(['0:a:true', '1:b:true', '2:c:true']);
+        });
+
+        it('collects async callback results and honors the delayed branch', async () => {
+            const source = [1, 2, 3];
+            const calls: string[] = [];
+            const results = await asyncForEach(
+                source,
+                async (item, index, array) => {
+                    calls.push(index + ':' + item + ':' + (array === source));
+                    return item * 10;
+                },
+                1
+            );
+
+            expect(calls).toEqual(['0:1:true', '1:2:true', '2:3:true']);
+            expect(results).toEqual([10, 20, 30]);
+        });
+    });
+
+    describe('primitive and object predicates', () => {
+        it('checks empty/nullish and alphanumeric values', () => {
+            expect(isNullEmptyOrUndefined(undefined)).toEqual(true);
+            expect(isNullEmptyOrUndefined(null)).toEqual(true);
+            expect(isNullEmptyOrUndefined('')).toEqual(true);
+            expect(isNullEmptyOrUndefined({})).toEqual(true);
+            expect(isNullEmptyOrUndefined([])).toEqual(true);
+            expect(isNullEmptyOrUndefined(0)).toEqual(true);
+            expect(isNullEmptyOrUndefined('value')).toEqual(false);
+
+            expect(isAlphaNumeric('abc123')).toEqual(true);
+            expect(isAlphaNumeric('abc-123')).toEqual(false);
+        });
+
+        it('identifies object shapes used by diff', () => {
+            const emptyWithoutPrototype = makeObjectWithoutPrototype();
+
+            expect(objectHasKeys({ a: 1 })).toEqual(true);
+            expect(isEmpty({})).toEqual(true);
+            expect(isEmpty([1])).toEqual(false);
+            expect(isObject({})).toEqual(true);
+            expect(isObject(null)).toEqual(false);
+            expect(hasOwnProperty({ a: 1 }, 'a')).toEqual(true);
+            expect(isDate(new Date())).toEqual(true);
+            expect(isEmptyObject({ a: null, b: undefined })).toEqual(true);
+            expect(isEmptyObject({ a: 0 })).toEqual(false);
+            expect(Object.getPrototypeOf(emptyWithoutPrototype)).toBeNull();
+        });
+    });
+
+    describe('diff', () => {
+        it('returns only nested additions, deletions, and replacements', () => {
+            const dateAfter = new Date('2024-01-02T00:00:00.000Z');
+            const result = diff(
+                {
+                    unchanged: 'same',
+                    removed: 'old',
+                    nested: { same: true, changed: 1 },
+                    arr: [1, 2],
+                    date: new Date('2024-01-01T00:00:00.000Z')
+                },
+                {
+                    unchanged: 'same',
+                    nested: { same: true, changed: 2 },
+                    arr: [1, 3],
+                    date: dateAfter,
+                    added: 'new'
+                }
+            );
+
+            expect(hasOwnProperty(result, 'unchanged')).toEqual(false);
+            expect(hasOwnProperty(result, 'removed')).toEqual(true);
+            expect(result.removed).toBeUndefined();
+            expect(result.nested.changed).toEqual(2);
+            expect(hasOwnProperty(result.nested, 'same')).toEqual(false);
+            expect(result.arr).toEqual([1, 3]);
+            expect(result.date).toBe(dateAfter);
+            expect(result.added).toEqual('new');
+        });
+
+        it('returns an empty diff for equal dates and arrays', () => {
+            const date = new Date('2024-01-01T00:00:00.000Z');
+
+            expect(diff(date, new Date(date))).toEqual({});
+            expect(diff([1, 2], [1, 2])).toEqual({});
+            expect(diff('old', 'new')).toEqual('new');
+        });
+    });
+
+    describe('map stringify replacers', () => {
+        it('serializes maps with and without keys', () => {
+            const value = { map: new Map<string, number>([['one', 1], ['two', 2]]) };
+
+            expect(JSON.stringify(value, mapStringifyReplacer)).toEqual(JSON.stringify({ map: [['one', 1], ['two', 2]] }));
+            expect(JSON.stringify(value, mapNoKeysStringifyReplacer)).toEqual(JSON.stringify({ map: [1, 2] }));
+        });
+    });
+
+    describe('user issue tracking id edge cases', () => {
+        it('clamps timestamp and random samples into valid base36 ranges', () => {
+            const samples = [-1, Number.NaN, 1, 0.9999999999, 0.5, 1 / 36];
+            let index = 0;
+
+            const id = createUserIssueTrackingId({
+                timestamp: -1.8,
+                random: () => samples[index++]
+            });
+
+            expect(id).toEqual('UI-0-00zzi1');
         });
     });
 });

@@ -35,7 +35,7 @@ export const HANDLE_POLICIES: HandlePolicies = {
     getActivePolicy(network: Network, isDeMi = false, atSlot?:number) {
         const theSlot = atSlot ? atSlot : getSlotNumberFromDate(new Date(Date.now()));
         return Object.entries(this[network]).find(([, value]) => 
-            value.firstMintingSlot <= theSlot && (value.lastMintingSlot ?? Number.POSITIVE_INFINITY) >= theSlot && value.isDeMi == isDeMi
+            value.firstMintingSlot <= theSlot && (value.lastMintingSlot ?? Number.POSITIVE_INFINITY) >= theSlot && (value.isDeMi ?? false) == isDeMi
         )?.[0]
     },
 

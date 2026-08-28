@@ -1,5 +1,19 @@
-import { addressHexToBech32, bech32FromHex, buildHolderInfo, buildPaymentAddressType, buildStakeKey, decodeAddress, getPaymentKeyHash } from '.';
-import { AddressType } from '../../types';
+import {
+    addressHexToBech32,
+    base64urlencode,
+    bech32AddressFromHashes,
+    bech32FromHex,
+    blake2b,
+    buildHolderInfo,
+    buildPaymentAddressType,
+    buildStakeKey,
+    dec2hex,
+    decodeAddress,
+    getPaymentAddressType,
+    getPaymentKeyHash,
+    parseAssetNameLabel
+} from '.';
+import { AddressType, AssetNameLabel } from '../../types';
 
 const addresses = ['addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x', 'addr1z8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gten0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs9yc0hh', 'addr1yx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerkr0vd4msrxnuwnccdxlhdjar77j6lg0wypcc9uar5d2shs2z78ve', 'addr1x8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gt7r0vd4msrxnuwnccdxlhdjar77j6lg0wypcc9uar5d2shskhj42g', 'addr1gx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer5pnz75xxcrzqf96k', 'addr128phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtupnz75xxcrtw79hu', 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8', 'addr1w8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtcyjy7wx', 'stake1uyehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gh6ffgw', 'stake178phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gtcccycj5'];
 
@@ -154,3 +168,48 @@ describe('addresses tests', () => {
 //         expect(result).toBeTruthy();
 //     });
 // });
+
+
+describe('crypto utility coverage', () => {
+    it('encodes base64url strings without padding and with URL-safe characters', () => {
+        const bytes = new Uint8Array([251, 255, 254]);
+
+        expect(base64urlencode(bytes.buffer as ArrayBuffer)).toEqual('-__-');
+    });
+
+    it('parses asset labels and invalid bech32 addresses', () => {
+        expect(parseAssetNameLabel(AssetNameLabel.LBL_222 + '6869')).toEqual(AssetNameLabel.LBL_222);
+        expect(parseAssetNameLabel('ffffffff6869')).toEqual(AssetNameLabel.NONE);
+        expect(decodeAddress('not-an-address')).toBeNull();
+    });
+
+    it('maps payment header nibbles to Shelley address types', () => {
+        expect(getPaymentAddressType(8)).toEqual(AddressType.Other);
+        expect(getPaymentAddressType(6)).toEqual(AddressType.Enterprise);
+        expect(getPaymentAddressType(0)).toEqual(AddressType.Wallet);
+        expect(getPaymentAddressType(1)).toEqual(AddressType.Script);
+    });
+
+    it('builds bech32 addresses from payment and stake hashes', () => {
+        const paymentHash = '01'.repeat(28);
+        const stakeHash = '02'.repeat(28);
+
+        const scriptAddress = bech32AddressFromHashes(paymentHash, 'script', stakeHash, 'script', 'addr', true);
+        const enterpriseAddress = bech32AddressFromHashes(paymentHash, 'key', '', 'key', 'addr', true);
+        const mainnetAddress = bech32AddressFromHashes(paymentHash, 'key', stakeHash, 'key', 'addr', false);
+
+        expect(decodeAddress(scriptAddress)).toEqual('30' + paymentHash + stakeHash);
+        expect(decodeAddress(enterpriseAddress)).toEqual('60' + paymentHash);
+        expect(mainnetAddress.startsWith('addr1')).toEqual(true);
+        expect(decodeAddress(mainnetAddress)).toEqual('01' + paymentHash + stakeHash);
+    });
+
+    it('formats bytes and hashes blake2b inputs consistently', () => {
+        const hex = 'deadbeef';
+
+        expect(dec2hex(15)).toEqual('0f');
+        expect(dec2hex(255)).toEqual('ff');
+        expect(blake2b(hex)).toEqual(blake2b(Buffer.from(hex, 'hex')));
+        expect(blake2b(new Uint8Array(Buffer.from(hex, 'hex')), 16)).toHaveLength(32);
+    });
+});
