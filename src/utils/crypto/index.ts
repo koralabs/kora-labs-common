@@ -60,7 +60,7 @@ export const decodeAddress = (address: string): string | null => {
         const addressWords = bech32.decode(address, address.length);
         const payload = bech32.fromWords(addressWords.words);
         return `${Buffer.from(payload).toString('hex')}`;
-    } catch (error) {
+    } catch {
         return null;
     }
 };

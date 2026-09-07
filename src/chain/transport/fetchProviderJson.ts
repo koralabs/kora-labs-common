@@ -219,6 +219,8 @@ export const fetchProviderJson = async <T>({
 }: ProviderRequestOptions): Promise<T> => {
     let attempt = 0;
 
+    // Retry loop: exits only via return (success) or throw (non-retriable / retries exhausted).
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try {
             const response = await runRateLimitedTask(rateLimitKey, maxRps, () => fetcher(url, { method, headers, body }));

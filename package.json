@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.9.5",
+    "version": "6.10.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -45,7 +45,7 @@
         "@types/pluralize": "^0.0.29",
         "@typescript-eslint/eslint-plugin": "^8.67.0",
         "@typescript-eslint/parser": "^8.67.0",
-        "eslint": "^10.8.1",
+        "eslint": "^8.57.1",
         "jest": "^30.4.2",
         "ts-jest": "^29.4.11",
         "typescript": "^5.9.3"

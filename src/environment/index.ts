@@ -75,14 +75,14 @@ export class Environment {
             const response = await fetch('http://169.254.169.254/latest/meta-data/tags/instance/Name');
             return response.text();
         }
-        catch(err){
+        catch {
             // swallow
         }
         try {
             const response = await fetch('http://169.254.169.254/latest/meta-data/instance-id');
             return response.text();
         }
-        catch(err){
+        catch {
             // swallow
         }
         return null;
@@ -94,7 +94,7 @@ export class Environment {
             const response = await fetch('http://169.254.170.2/v2/metadata');
             return await response.json();
         }
-        catch(err){
+        catch {
             return null;
         }
         
