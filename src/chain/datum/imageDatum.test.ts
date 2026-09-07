@@ -31,23 +31,39 @@ describe('imageDatum', () => {
                     }
                 })
         });
-        const result = await getImageDataFromDatum('https://api', 'deadbeefcbor', fetcher as any);
+        const result = await getImageDataFromDatum('https://api', 'deadbeefcbor', { fetcher: fetcher as any });
         expect(result.image).toBe('ipfs://bg');
         expect(result.creatorDefaults).toEqual({ font: 'Inter' });
         expect(result.metadata).toEqual({ image: 'ipfs://bg', name: 'BG' });
+    });
+
+    it('forwards api headers (api-key/User-Agent) to the /datum decode request', async () => {
+        // Correctness: the Handles API gates /datum by api-key; dropping it silently changes decoding.
+        let sentHeaders: any;
+        const fetcher = async (_url: string, init: any) => {
+            sentHeaders = init.headers;
+            return { text: async () => JSON.stringify({ constructor_0: { '0': { image: 'i' } } }) };
+        };
+        await getImageDataFromDatum('https://api', 'cbor', {
+            fetcher: fetcher as any,
+            headers: { 'api-key': 'secret', 'User-Agent': 'kora' }
+        });
+        expect(sentHeaders['api-key']).toBe('secret');
+        expect(sentHeaders['User-Agent']).toBe('kora');
+        expect(sentHeaders['Content-Type']).toBe('application/json');
     });
 
     it('getImageDataFromDatum returns empty image when decode throws (never crashes the caller)', async () => {
         const fetcher = async () => {
             throw new Error('decoder down');
         };
-        const result = await getImageDataFromDatum('https://api', 'x', fetcher as any);
+        const result = await getImageDataFromDatum('https://api', 'x', { fetcher: fetcher as any });
         expect(result).toEqual({ image: '' });
     });
 
     it('getImageDataFromDatum tolerates an empty decoder response', async () => {
         const fetcher = async () => ({ text: async () => '' });
-        const result = await getImageDataFromDatum('https://api', 'x', fetcher as any);
+        const result = await getImageDataFromDatum('https://api', 'x', { fetcher: fetcher as any });
         expect(result.image).toBeUndefined();
     });
 });

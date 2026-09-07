@@ -19,6 +19,12 @@ export interface ChainProviderConfig {
      * critical — do NOT swap it for a local CBOR decode without matching that behavior.
      */
     apiHost?: string;
+    /**
+     * Extra headers sent with the datum-decode POST to `apiHost` (e.g. `api-key`, `User-Agent`).
+     * Required when the Handles API gates `/datum` by api-key — omitting them silently changes
+     * datum-decode behavior. `chainConfigFromEnv` populates these from HANDLE_ME_API_KEY / KORA_USER_AGENT.
+     */
+    apiHeaders?: Record<string, string>;
 }
 
 export const normalizeNetwork = (network: string): string => (network || 'mainnet').toLowerCase();

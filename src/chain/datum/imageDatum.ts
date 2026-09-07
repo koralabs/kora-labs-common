@@ -7,15 +7,23 @@ import { ICreatorDefaults } from '../../handles/interfaces';
 
 const defaultFetch = (url: string, init?: any) => (globalThis as any).fetch(url, init);
 
+export interface DatumDecodeOptions {
+    /** Extra request headers (e.g. api-key, User-Agent) required by the Handles API /datum endpoint. */
+    headers?: Record<string, string>;
+    /** Injectable fetch for tests; defaults to the runtime global fetch. */
+    fetcher?: (url: string, init?: any) => Promise<{ text: () => Promise<string> }>;
+}
+
 export const decodeDatumViaApi = async <T>(
     apiHost: string,
     datum: string,
     schema?: Record<string, unknown>,
-    fetcher: (url: string, init?: any) => Promise<{ text: () => Promise<string> }> = defaultFetch
+    options: DatumDecodeOptions = {}
 ): Promise<T> => {
+    const fetcher = options.fetcher ?? defaultFetch;
     const response = await fetcher(`${apiHost}/datum?from=plutus_data_cbor&to=json`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
         body: JSON.stringify({ cbor: datum, schema })
     });
     const text = await response.text();
@@ -68,7 +76,7 @@ export interface ImageDatumDetails {
 export const getImageDataFromDatum = async (
     apiHost: string,
     datum: string,
-    fetcher?: (url: string, init?: any) => Promise<{ text: () => Promise<string> }>
+    options?: DatumDecodeOptions
 ): Promise<ImageDatumDetails> => {
     let decodedDatum: any;
     try {
@@ -89,7 +97,7 @@ export const getImageDataFromDatum = async (
                     }
                 }
             },
-            fetcher
+            options
         );
     } catch {
         return { image: '' };
