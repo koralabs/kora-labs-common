@@ -261,7 +261,9 @@ export class Koios implements ChainProvider {
         if (metadata && metadata.image) image = metadata.image as string;
 
         if (datum) {
-            return getImageDataFromDatum(this.config.apiHost ?? defaultApiHost(this.config.network), datum);
+            return getImageDataFromDatum(this.config.apiHost ?? defaultApiHost(this.config.network), datum, {
+                headers: this.config.apiHeaders
+            });
         }
 
         return { image, metadata };

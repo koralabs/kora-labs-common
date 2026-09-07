@@ -153,7 +153,9 @@ export class Blockfrost implements ChainProvider {
 
         const datum = await this.getAssetDatum(policyId, updateHex);
         if (datum) {
-            return getImageDataFromDatum(this.config.apiHost ?? defaultApiHost(this.config.network), datum);
+            return getImageDataFromDatum(this.config.apiHost ?? defaultApiHost(this.config.network), datum, {
+                headers: this.config.apiHeaders
+            });
         }
 
         let image = '';
