@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.12.0",
+    "version": "6.13.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -40,11 +40,15 @@
         "@aiken-lang/merkle-patricia-forestry": "^1.2.0",
         "@aws-sdk/client-dynamodb": "^3.549.0",
         "@aws-sdk/lib-dynamodb": "^3.549.0",
+        "@cardano-sdk/core": "^0.46.15",
+        "@cardano-sdk/crypto": "^0.4.7",
+        "@emurgo/cardano-message-signing-nodejs": "^1.1.0",
         "@types/jest": "^30.0.0",
         "@types/node": "^22.15.17",
         "@types/pluralize": "^0.0.29",
         "@typescript-eslint/eslint-plugin": "^8.67.0",
         "@typescript-eslint/parser": "^8.67.0",
+        "bip39": "^3.1.0",
         "eslint": "^8.57.1",
         "jest": "^30.4.2",
         "ts-jest": "^29.4.11",
@@ -67,10 +71,26 @@
         "brace-expansion": "5.0.9"
     },
     "peerDependencies": {
-        "@aiken-lang/merkle-patricia-forestry": "^1.2.0"
+        "@aiken-lang/merkle-patricia-forestry": "^1.2.0",
+        "@cardano-sdk/core": "^0.46.12",
+        "@cardano-sdk/crypto": "^0.4.5",
+        "bip39": "^3.1.0",
+        "@emurgo/cardano-message-signing-nodejs": "^1.1.0"
     },
     "peerDependenciesMeta": {
         "@aiken-lang/merkle-patricia-forestry": {
+            "optional": true
+        },
+        "@cardano-sdk/core": {
+            "optional": true
+        },
+        "@cardano-sdk/crypto": {
+            "optional": true
+        },
+        "bip39": {
+            "optional": true
+        },
+        "@emurgo/cardano-message-signing-nodejs": {
             "optional": true
         }
     }
