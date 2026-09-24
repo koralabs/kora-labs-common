@@ -142,6 +142,10 @@ const createToken = (topology: CronLockTopology): string => `${topology.nodeCode
 export const isPeerUnavailableError = (error: unknown): boolean =>
     error instanceof errors.ResponseError && error.code === types.responseErrorCodes.unavailableException;
 
+/** A write timeout leaves an LWT's outcome unknown: the proposal may or may not have been applied. */
+export const isWriteTimeoutError = (error: unknown): boolean =>
+    error instanceof errors.ResponseError && error.code === types.responseErrorCodes.writeTimeout;
+
 /**
  * The directly testable LWT operation. Each invocation owns a unique token, so
  * concurrent ticks on one node cannot both treat the node identity as ownership.
@@ -183,7 +187,26 @@ export const acquireWithExecutor = async (
         if (mode === 'serial' && isPeerUnavailableError(error)) {
             return { status: 'peerUnavailable', token, message };
         }
+        if (isWriteTimeoutError(error)) {
+            // The LWT timed out: it may have been applied WITH OUR TOKEN, in which case nobody (not even
+            // us) could run until the lease expired. A read at the same serial consistency completes any
+            // in-flight Paxos round, so it tells us the real owner.
+            const owner = await readOwner(executor, key, serialConsistency);
+            if (owner === token) return { status: 'acquired', token };
+            if (owner) return { status: 'held' };
+        }
         return { status: 'unavailable', message };
+    }
+};
+
+/** The lock's owner as a linearizable (serial) read sees it; undefined when absent or unreadable. */
+const readOwner = async (executor: CqlExecutor, key: string, serialConsistency: number): Promise<string | undefined> => {
+    try {
+        const result = await executor.execute(`SELECT owner FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`, [key], { prepare: true, consistency: serialConsistency });
+        const owner = (result.rows[0] as Record<string, unknown> | undefined)?.owner;
+        return typeof owner === 'string' ? owner : undefined;
+    } catch {
+        return undefined;
     }
 };
 
