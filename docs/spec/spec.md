@@ -11,6 +11,7 @@
 - `protectedWords`: protected/reserved word policy engine.
 - `utils`: generic utilities plus `crypto` and `cbor` submodules, including `createUserIssueTrackingId`, `isUserIssueTrackingId`, `normalizeUserIssueEventSegment`, and `buildUserIssueEventKey`.
 - `repositories`, `marketplace`, `types`: shared contracts/types consumed by service repos.
+- Subpath-only (server) modules, not on the root barrel: `aws`, `chain` (provider transport with process-wide rate-limit compliance, Koios/Blockfrost read providers), `txBuild` (Helios-free Plutus tx finalizer, fees, script data hash, Blockfrost evaluate/submit on `@cardano-sdk/core`), `cronLock` (cross-DC CQL SERIAL cron mutex on `cassandra-driver`), `mpt`, `testing`; plus the isomorphic `tx` byte-level helpers. See [Modules and Data](./modules-and-data.md).
 
 ### Entry Surface
 - `src/index.ts` exports the public API; downstream services should avoid deep-importing internals unless required.
@@ -30,6 +31,7 @@
 - Crypto/address stack: `bech32`, `blakejs`, `bs58`, `crc`.
 - CBOR stack: `cbor` + schema helpers.
 - Protected words inflection: `pluralize-esm`.
+- Optional peers (only for the subpath modules that need them): `@cardano-sdk/core` (`txBuild`, `testing`, `tx` tests), `cassandra-driver` (`cronLock`), `@aiken-lang/merkle-patricia-forestry` (`mpt`).
 - Test tooling: `jest` + `ts-jest`.
 
 ## Testing and Coverage
