@@ -1,4 +1,5 @@
 import { asyncForEach } from '../../utils';
+import { HeaderReader, RateLimitedError, recordRateLimit, statedWaitMs, waitForRateLimit } from './rateLimit';
 
 // Shared provider transport: rate-limited, retrying JSON fetch with provider-aware payload-error
 // detection. Ported from the handle.me BFF (the mature implementation) into kora-labs-common so
@@ -16,8 +17,8 @@ type ProviderErrorPayload = {
 
 type ProviderFetcher = (
     url: string,
-    init?: { method?: string; headers?: Record<string, string>; body?: string }
-) => Promise<{ ok: boolean; status: number; statusText: string; text: () => Promise<string> }>;
+    init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array }
+) => Promise<{ ok: boolean; status: number; statusText: string; text: () => Promise<string>; headers?: HeaderReader }>;
 
 interface ProviderRateLimitState {
     pending: QueuedProviderTask<any>[];
@@ -36,29 +37,33 @@ export interface ProviderRequestOptions {
     url: string;
     method?: string;
     headers?: Record<string, string>;
-    body?: string;
+    body?: string | Uint8Array;
     maxRetries?: number;
     retryBaseDelayMs?: number;
     maxRps?: number;
     rateLimitKey?: string;
+    /** Longest server-stated rate-limit wait to sit out in-process; longer waits throw RateLimitedError. */
+    maxRateLimitWaitMs?: number;
     fetcher?: ProviderFetcher;
 }
 
 const DEFAULT_MAX_RPS = 5;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BASE_DELAY_MS = 500;
+const DEFAULT_MAX_RATE_LIMIT_WAIT_MS = 30_000;
+const MAX_RATE_LIMIT_WAITS = 3;
 
-const RETRIABLE_STATUS_CODES = new Set([403, 408, 425, 429, 500, 502, 503, 504]);
+// 429 is deliberately absent: a rate limit is retried only after the wait the server states (see
+// fetchProviderJson), never on a blind backoff.
+const RETRIABLE_STATUS_CODES = new Set([403, 408, 425, 500, 502, 503, 504]);
 const RETRIABLE_MESSAGE_SNIPPETS = [
     'terminated',
     'socket',
     'econnreset',
     'fetch failed',
     'gateway timeout',
-    'too many requests',
     'payload too large',
     'timed out acquiring connection from connection pool',
-    'rate limit',
     'service unavailable',
     'temporarily unavailable'
 ];
@@ -215,18 +220,28 @@ export const fetchProviderJson = async <T>({
     retryBaseDelayMs = DEFAULT_RETRY_BASE_DELAY_MS,
     maxRps = DEFAULT_MAX_RPS,
     rateLimitKey = provider,
+    maxRateLimitWaitMs = DEFAULT_MAX_RATE_LIMIT_WAIT_MS,
     fetcher = defaultFetch
 }: ProviderRequestOptions): Promise<T> => {
     let attempt = 0;
+    let rateLimitWaits = 0;
 
     // Retry loop: exits only via return (success) or throw (non-retriable / retries exhausted).
     // eslint-disable-next-line no-constant-condition
     while (true) {
+        // A wait recorded by ANY earlier call on this key (this process) is honored before calling again.
+        await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
+        let rateLimited: { waitMs: number | null; error: Error } | undefined;
         try {
             const response = await runRateLimitedTask(rateLimitKey, maxRps, () => fetcher(url, { method, headers, body }));
 
             const responseText = await response.text();
             const { value: parsed, parseError } = parseJson(responseText);
+
+            if (response.ok && isQuotaExhausted(response.headers)) {
+                const waitMs = statedWaitMs(response.headers, undefined);
+                if (waitMs !== null) recordRateLimit(rateLimitKey, waitMs);
+            }
 
             if (parseError && responseText) {
                 throw createProviderError({
@@ -243,16 +258,35 @@ export const fetchProviderJson = async <T>({
                 const status = Number(payloadError?.status_code ?? payloadError?.status ?? response.status);
                 const statusText =
                     response.statusText || `${payloadError?.error ?? payloadError?.message ?? 'Request failed'}`;
-                throw createProviderError({ provider, status, statusText, payload: payloadError ?? parsed, responseText });
+                const error = createProviderError({ provider, status, statusText, payload: payloadError ?? parsed, responseText });
+                const waitMs = statedWaitMs(response.headers, parsed);
+                if (status === 429 || waitMs !== null) {
+                    rateLimited = { waitMs, error };
+                } else {
+                    throw error;
+                }
+            } else {
+                return parsed as T;
             }
-
-            return parsed as T;
         } catch (error: any) {
             if (attempt >= maxRetries || !isRetriableError(provider, error)) {
                 throw error;
             }
             attempt++;
             await delay(retryBaseDelayMs * attempt);
+            continue;
+        }
+
+        // Rate limited: never call again before the stated time; with no stated time, stop.
+        const { waitMs, error } = rateLimited;
+        if (waitMs === null) throw error;
+        recordRateLimit(rateLimitKey, waitMs);
+        // Sitting out a stated wait is not a blind retry, so it does not spend `maxRetries` — but it is bounded.
+        if (++rateLimitWaits > MAX_RATE_LIMIT_WAITS || waitMs > maxRateLimitWaitMs) {
+            throw new RateLimitedError(rateLimitKey, waitMs, error.message);
         }
     }
 };
+
+const isQuotaExhausted = (headers: HeaderReader | undefined) =>
+    headers?.get('x-ratelimit-remaining')?.trim() === '0' || headers?.get('ratelimit-remaining')?.trim() === '0';
