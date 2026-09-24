@@ -644,4 +644,40 @@ describe('CBOR tests', () => {
             expect(decoded).toEqual(expected);
         });
     });
+
+    describe('Plutus constructor tags', () => {
+        // Regression: constructor_4+ fell through to a text-keyed CBOR map, so the pz Burn
+        // redeemer (Constr 5) could not be deserialized by the validator (UnConstrData).
+        it.each([
+            [0, 'd879'],
+            [3, 'd87c'],
+            [4, 'd87d'],
+            [5, 'd87e'],
+            [6, 'd87f'],
+            [7, 'd90500'],
+            [127, 'd90578']
+        ])('encodes constructor_%i with its compact tag and round-trips', async (index, tagHex) => {
+            const json = () => ({ [`constructor_${index}`]: [42] });
+            const encoded = await encodeJsonToDatum(json());
+            expect(encoded.startsWith(tagHex)).toBe(true);
+            expect(await decodeCborToJson({ cborString: encoded })).toEqual(json());
+        });
+
+        it('encodes constructors above 127 with the general tag 102 [index, fields]', async () => {
+            const encoded = await encodeJsonToDatum({ constructor_200: [42] });
+            expect(encoded.startsWith('d8668218c8')).toBe(true);
+            expect(await decodeCborToJson({ cborString: encoded })).toEqual({ constructor_200: [42] });
+        });
+
+        it('never encodes a constructor key as a map key', async () => {
+            const encoded = await encodeJsonToDatum({ constructor_5: [{ constructor_0: [{ constructor_0: [] }, '0x01'] }, '0x02'] });
+            expect(encoded).not.toContain(Buffer.from('constructor_5').toString('hex'));
+            expect(encoded.startsWith('d87e')).toBe(true);
+        });
+
+        it('keeps non-numeric constructor_ keys as ordinary map keys', async () => {
+            const encoded = await encodeJsonToDatum({ constructor_x: 1 });
+            expect(encoded.startsWith('a1')).toBe(true);
+        });
+    });
 });

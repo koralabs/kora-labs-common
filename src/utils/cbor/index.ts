@@ -115,20 +115,14 @@ class JsonToDatumObject {
         } else if (typeof this.json === 'object') {
             if (this.json !== null) {
                 const fieldsMap = new Map();
-                let tag = null;
                 const keys = this.json instanceof Map ? this.json.keys() : Object.keys(this.json);
                 for (const key of keys) {
                     if (key instanceof DupeKey) {
                         fieldsMap.set(key, this.json.get(key));
                     } else {
                         const split_key = parseInt(key.split('_').at(1) ?? '');
-                        if (
-                            key.startsWith('constructor_') &&
-                            !isNaN(split_key) &&
-                            [0, 1, 2, 3].includes(split_key as number)
-                        ) {
-                            tag = 121 + split_key;
-                            return encoder.pushAny(new cbor.Tagged(tag, this.json[key]));
+                        if (key.startsWith('constructor_') && Number.isInteger(split_key) && split_key >= 0) {
+                            return encoder.pushAny(constrToTagged(split_key, this.json[key]));
                         }
 
                         const bufferedKey = this.getFormattedKey(key);
@@ -443,6 +437,22 @@ const decodeObject = ({ val, constr = null, schema = {}, defaultKeyType = Defaul
     }
 };
 
+// Plutus Constr tag scheme (CIP-0005 / plutus-core): 0-6 -> 121-127, 7-127 -> 1280-1400,
+// anything else -> tag 102 wrapping [index, fields]. Every index must round-trip; an
+// unrecognized `constructor_N` key would otherwise be encoded as a text-keyed map.
+export const constrToTagged = (index: number, fields: unknown) => {
+    if (index <= 6) return new cbor.Tagged(121 + index, fields);
+    if (index <= 127) return new cbor.Tagged(1280 + index - 7, fields);
+    return new cbor.Tagged(102, [index, fields]);
+};
+
+const CONSTR_DECODE_TAGS: Record<number, (val: any) => any> = {
+    102: ([index, fields]: [number, any]) => ({ [`constructor_${index}`]: fields })
+};
+for (let index = 0; index <= 127; index++) {
+    CONSTR_DECODE_TAGS[index <= 6 ? 121 + index : 1280 + index - 7] = (val: any) => ({ [`constructor_${index}`]: val });
+}
+
 export const decodeCborToJson = ({
     cborString,
     schema,
@@ -455,13 +465,7 @@ export const decodeCborToJson = ({
     forJson?: boolean;
 }) => {
     const decoded = cbor.decodeAllSync(Buffer.from(cborString, 'hex'), {
-        tags: {
-            121: (val: any) => ({ [`constructor_0`]: val }),
-            122: (val: any) => ({ [`constructor_1`]: val }),
-            123: (val: any) => ({ [`constructor_2`]: val }),
-            124: (val: any) => ({ [`constructor_3`]: val }),
-            125: (val: any) => ({ [`constructor_4`]: val })
-        }
+        tags: CONSTR_DECODE_TAGS
     });
 
     let [data] = decoded;
