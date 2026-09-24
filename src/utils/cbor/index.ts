@@ -68,16 +68,12 @@ class JsonToDatumObject {
             indefiniteArrays: options?.indefiniteArrays ?? true,
             defaultToText: options?.defaultToText
         };
-        if (Array.isArray(this.json)) {
-            for (let i = 0; i < this.json.length; i++) {
-                this.json[i] = new JsonToDatumObject(this.json[i], this.options );
-            }
-        } else if (typeof this.json === 'object') {
-            if (this.json !== null) {
-                Object.keys(this.json).map((key) => {
-                    this.json[key] = new JsonToDatumObject(this.json[key], this.options);
-                });
-            }
+        // Wrap children into NEW containers: the caller's JSON must not be modified (re-encoding the
+        // same object used to produce garbage, since its children had been replaced by wrappers).
+        if (Array.isArray(json)) {
+            this.json = json.map((item) => new JsonToDatumObject(item, this.options));
+        } else if (typeof json === 'object' && json !== null && !(json instanceof Map)) {
+            this.json = Object.fromEntries(Object.keys(json).map((key) => [key, new JsonToDatumObject(json[key], this.options)]));
         }
     }
 

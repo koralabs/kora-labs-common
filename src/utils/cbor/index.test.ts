@@ -680,4 +680,18 @@ describe('CBOR tests', () => {
             expect(encoded.startsWith('a1')).toBe(true);
         });
     });
+
+    describe('encodeJsonToDatum input handling', () => {
+        // Invariant: encoding does not modify the caller's JSON, so encoding it again gives the same bytes.
+        // Failure caught: the encoder replaced every child with its wrapper in place — a second encode of
+        // the same HAL CIP-68 datum produced a 166 KB blob instead of the 590-byte datum.
+        // Negative control: restoring the in-place `this.json[key] = new JsonToDatumObject(...)` fails both expects.
+        it('leaves the input untouched and re-encodes it identically', async () => {
+            const datum = { constructor_0: [{ name: 'H.A.L. - 1NB', files: [{ src: 'ipfs://x', mediaType: 'model/gltf-binary' }] }, 1, { royalty_included: 1 }] };
+            const snapshot = JSON.parse(JSON.stringify(datum));
+            const first = await encodeJsonToDatum(datum);
+            expect(datum).toEqual(snapshot);
+            expect(await encodeJsonToDatum(datum)).toBe(first);
+        });
+    });
 });
