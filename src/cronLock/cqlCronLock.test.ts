@@ -130,4 +130,29 @@ describe('CQL cron-lock acquisition', () => {
         assert.match(queries[0], /IF NOT EXISTS USING TTL 600$/);
         assert.throws(() => leaseMs(0), /Invalid cron-lock lease/);
     });
+
+    // Invariant: an LWT that timed out but WAS applied with this invocation's token is recognised as acquired.
+    // Failure caught: 'Server timeout during write query at consistency SERIAL' (seen several times a day on
+    // the SFO/RDM pair) left the lock written with a token nobody knew — every box stood down until the
+    // lease expired (HAL engine: 10 min; minting: 30 min).
+    // Negative control: without the serial read-back the first case below returns 'unavailable'.
+    it('resolves a timed-out acquisition by reading the owner at serial consistency', async () => {
+        const writeTimeout = responseError(types.responseErrorCodes.writeTimeout);
+        const table = (ownerAfterTimeout: string | undefined, readFails = false): CqlExecutor => ({
+            async execute(query, _params, options) {
+                if (query.startsWith('INSERT')) throw writeTimeout;
+                if (query.startsWith('SELECT')) {
+                    assert.equal((options as { consistency: number }).consistency, types.consistencies.serial);
+                    if (readFails) throw writeTimeout;
+                    return { rows: ownerAfterTimeout ? [{ owner: ownerAfterTimeout }] : [] };
+                }
+                throw new Error(`unexpected ${query}`);
+            }
+        });
+
+        assert.deepEqual(await acquireWithExecutor(table('sfo:me'), 'lock', 'none', topology, 'sfo:me'), { status: 'acquired', token: 'sfo:me' });
+        assert.deepEqual(await acquireWithExecutor(table('rdm:other'), 'lock', 'none', topology, 'sfo:me'), { status: 'held' });
+        assert.equal((await acquireWithExecutor(table(undefined), 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
+        assert.equal((await acquireWithExecutor(table('sfo:me', true), 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
+    });
 });
