@@ -14,7 +14,9 @@ export const READ_ONLY_GUARD_ERROR = 'E2E_READONLY_GUARD';
 export interface SignRequest {
     method: (typeof FUND_MOVING_METHODS)[number];
     at: number;
-    /** The exact tx CBOR the app asked to sign (first tx for signTxs). Decode it to assert what would have been signed. */
+    /** Every exact tx CBOR presented (one for signTx/submitTx, all of a CIP-103 signTxs batch). */
+    txCbors: string[];
+    /** The first of `txCbors` — the common single-tx case. */
     txCbor: string;
 }
 
@@ -26,20 +28,21 @@ export interface ReadOnlyWallet {
     waitForSignRequest(timeoutMs: number, tick?: () => Promise<unknown>): Promise<boolean>;
 }
 
-const firstTxCbor = (params: unknown): string => {
-    if (typeof params === 'string') return params;
-    if (Array.isArray(params)) {
-        const first = params[0] as string | { cbor?: string; tx?: string } | undefined;
-        return typeof first === 'string' ? first : (first?.cbor ?? first?.tx ?? '');
-    }
-    return '';
+const presentedTxCbors = (params: unknown): string[] => {
+    if (typeof params === 'string') return [params];
+    if (!Array.isArray(params)) return [];
+    return params.flatMap((entry: string | { cbor?: string; tx?: string } | undefined) => {
+        const cbor = typeof entry === 'string' ? entry : (entry?.cbor ?? entry?.tx);
+        return typeof cbor === 'string' ? [cbor] : [];
+    });
 };
 
 export const makeReadOnlyWallet = (inner: LiveWallet): ReadOnlyWallet => {
     const signRequests: SignRequest[] = [];
     const guardedCall = async (method: string, params?: unknown): Promise<unknown> => {
         if ((FUND_MOVING_METHODS as readonly string[]).includes(method)) {
-            signRequests.push({ method: method as SignRequest['method'], at: Date.now(), txCbor: firstTxCbor(params) });
+            const txCbors = presentedTxCbors(params);
+            signRequests.push({ method: method as SignRequest['method'], at: Date.now(), txCbors, txCbor: txCbors[0] ?? '' });
             throw new Error(`${READ_ONLY_GUARD_ERROR}: '${method}' is blocked — this suite reaches the transaction and stops; it never signs or submits.`);
         }
         return inner.call(method, params);

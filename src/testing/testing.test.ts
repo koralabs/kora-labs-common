@@ -159,6 +159,9 @@ describe('makeReadOnlyWallet', () => {
             ['signTx', 'deadbeef'],
             ['submitTx', 'cafe']
         ]);
+        await expect(guard.wallet.call('signTxs', [{ cbor: 'aa', partialSign: true }, 'bb'])).rejects.toThrow('E2E_READONLY_GUARD');
+        expect(guard.signRequests[2].txCbors).toEqual(['aa', 'bb']);
+        expect(guard.signRequests[2].txCbor).toBe('aa');
         guard.reset();
         expect(guard.reachedSign()).toBe(false);
     });
