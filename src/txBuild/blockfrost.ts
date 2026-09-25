@@ -201,6 +201,11 @@ export class BlockfrostTxClient {
         return this.toUtxo(output, txHash, output.address!);
     }
 
+    /** A stake address's registration state; null when the chain has never seen it. */
+    getAccount(stakeAddress: string): Promise<{ stake_address: string; active: boolean } | null> {
+        return this.getOrNull(`accounts/${stakeAddress}`);
+    }
+
     /** Node (Ogmios) evaluation of every redeemer; `additionalUtxos` supplies inputs not yet on chain. */
     async evaluateTx(cbor: string, additionalUtxos: Cardano.Utxo[] = []): Promise<Map<RedeemerKey, ExUnits>> {
         const response = await this.request<{ result?: { EvaluationResult?: Record<string, { memory: number; steps: number }>; EvaluationFailure?: unknown }; fault?: unknown }>(
