@@ -31,7 +31,7 @@
 - Crypto/address stack: `bech32`, `blakejs`, `bs58`, `crc`.
 - CBOR stack: `cbor` + schema helpers.
 - Protected words inflection: `pluralize-esm`.
-- Optional peers (only for the subpath modules that need them): `@cardano-sdk/core` (`txBuild`, `testing`, `tx` tests), `cassandra-driver` (`cronLock`), `@aiken-lang/merkle-patricia-forestry` (`mpt`).
+- Optional peers (only for the subpath modules that need them): `@cardano-sdk/core` (`txBuild`, `testing`, `wallet`, `tx` tests), `cassandra-driver` (`cronLock`), `@aiken-lang/merkle-patricia-forestry` (`mpt`).
 - Test tooling: `jest` + `ts-jest`.
 
 ## Testing and Coverage
