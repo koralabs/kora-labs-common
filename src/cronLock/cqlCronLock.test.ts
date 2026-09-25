@@ -155,4 +155,37 @@ describe('CQL cron-lock acquisition', () => {
         assert.equal((await acquireWithExecutor(table(undefined), 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
         assert.equal((await acquireWithExecutor(table('sfo:me', true), 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
     });
+
+    // Invariant: an invocation that cannot learn whether its timed-out write committed, and so will not
+    // run, retracts it (only if it is its own) instead of leaving every box idle for the lease.
+    // Seen live 2026-09-25 00:25 UTC: write and read-back both timed out; the row blocked the engine 10 min.
+    // Negative control: without the retraction the row survives the failed acquisition.
+    it('retracts its own possibly-applied write when the outcome stays unknown', async () => {
+        const writeTimeout = responseError(types.responseErrorCodes.writeTimeout);
+        const rows = new Map<string, string>();
+        const executor: CqlExecutor = {
+            async execute(query, params = []) {
+                if (query.startsWith('INSERT')) {
+                    if (!rows.has(params[0] as string)) rows.set(params[0] as string, params[1] as string); // IF NOT EXISTS committed…
+                    throw writeTimeout; // …but the reply timed out
+                }
+                if (query.startsWith('SELECT')) throw writeTimeout; // read-back times out too
+                if (query.startsWith('DELETE')) {
+                    const [name, owner] = params as string[];
+                    if (rows.get(name) === owner) rows.delete(name);
+                    return { rows: [{ '[applied]': true }] };
+                }
+                throw new Error(`unexpected ${query}`);
+            }
+        };
+        const result = await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:me');
+        assert.equal(result.status, 'unavailable');
+        assert.match((result as { message: string }).message, /retracted our proposal/);
+        assert.equal(rows.size, 0);
+
+        // Another box's lock is never retracted by us.
+        rows.set('preview:lock', 'rdm:other');
+        assert.equal((await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
+        assert.equal(rows.get('preview:lock'), 'rdm:other');
+    });
 });

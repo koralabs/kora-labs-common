@@ -191,22 +191,37 @@ export const acquireWithExecutor = async (
             // The LWT timed out: it may have been applied WITH OUR TOKEN, in which case nobody (not even
             // us) could run until the lease expired. A read at the same serial consistency completes any
             // in-flight Paxos round, so it tells us the real owner.
-            const owner = await readOwner(executor, key, serialConsistency);
-            if (owner === token) return { status: 'acquired', token };
-            if (owner) return { status: 'held' };
+            const read = await readOwner(executor, key, serialConsistency);
+            if (read.owner === token) return { status: 'acquired', token };
+            if (read.owner) return { status: 'held' };
+            if (read.error) {
+                // Still unknown and we will not run: retract our possibly-applied proposal so it cannot
+                // block every box for the whole lease. Conditional on our token, so it never frees another's lock.
+                const retracted = await deleteIfOwner(executor, key, token, serialConsistency, consistency);
+                return { status: 'unavailable', message: `${message}; owner read failed (${read.error}); ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
+            }
         }
         return { status: 'unavailable', message };
     }
 };
 
-/** The lock's owner as a linearizable (serial) read sees it; undefined when absent or unreadable. */
-const readOwner = async (executor: CqlExecutor, key: string, serialConsistency: number): Promise<string | undefined> => {
+/** The lock's owner as a linearizable (serial) read sees it. */
+const readOwner = async (executor: CqlExecutor, key: string, serialConsistency: number): Promise<{ owner?: string; error?: string }> => {
     try {
         const result = await executor.execute(`SELECT owner FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`, [key], { prepare: true, consistency: serialConsistency });
         const owner = (result.rows[0] as Record<string, unknown> | undefined)?.owner;
-        return typeof owner === 'string' ? owner : undefined;
+        return typeof owner === 'string' ? { owner } : {};
+    } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+const deleteIfOwner = async (executor: CqlExecutor, key: string, token: string, serialConsistency: number, consistency: number): Promise<boolean> => {
+    try {
+        await executor.execute(`DELETE FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ? IF owner = ?`, [key, token], { prepare: true, serialConsistency, consistency });
+        return true;
     } catch {
-        return undefined;
+        return false;
     }
 };
 
