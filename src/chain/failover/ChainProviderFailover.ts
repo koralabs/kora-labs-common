@@ -2,6 +2,7 @@ import {
     AccountAsset,
     AddressInfo,
     BackgroundImageDetails,
+    ChainProtocolParameters,
     ChainProvider,
     ChainProviderAsset,
     ChainProviderUtxo
@@ -58,18 +59,23 @@ export class ChainProviderFailover {
         funcName: keyof ChainProvider,
         args: any[],
         currentIndex?: number,
-        runNum?: number
+        runNum?: number,
+        notFound?: unknown
     ): Promise<T> {
         const num = runNum ?? 0;
         const index = currentIndex ?? this.getStartIndex();
         const chainProvider = this.providers[index];
 
         return await (chainProvider[funcName] as any)(...args).catch((error: any) => {
+            // A 404 is an answer ("not on chain (yet)"), not a provider failure: it still falls
+            // through, but without benching the provider, and it outranks another provider's outage.
+            const isNotFound = error?.status === 404;
             // Mark the failed provider unhealthy for the cooldown window so it isn't chosen as the
             // start provider again immediately; it remains a valid fallback.
-            if (this.cooldownMs > 0) this.unhealthyUntil[index] = this.now() + this.cooldownMs;
-            if (num === this.providers.length - 1) throw error;
-            return this.getResponse(funcName, args, this.getNextProviderIndex(index), num + 1);
+            if (this.cooldownMs > 0 && !isNotFound) this.unhealthyUntil[index] = this.now() + this.cooldownMs;
+            const answer = notFound ?? (isNotFound ? error : undefined);
+            if (num === this.providers.length - 1) throw answer ?? error;
+            return this.getResponse(funcName, args, this.getNextProviderIndex(index), num + 1, answer);
         });
     }
 
@@ -106,8 +112,13 @@ export class ChainProviderFailover {
         // provider lagging a burn returns a stale UTxO and falsely resurrects a de-indexed handle.
         // Prefer Blockfrost (reads the latest asset tx live; Koios's tx index can lag a burn by
         // minutes). Koios stays the failover on error.
-        const preferredIndex = this.providers.findIndex((p) => (p.name ?? '').toLowerCase().includes('blockfrost'));
-        return this.getResponse('getAssetUtxo', [policyId, hex], preferredIndex >= 0 ? preferredIndex : undefined);
+        return this.getResponse('getAssetUtxo', [policyId, hex], this.blockfrostIndex());
+    }
+
+    /** Index of the Blockfrost provider, if configured (start provider for freshness-critical reads). */
+    private blockfrostIndex(): number | undefined {
+        const index = this.providers.findIndex((p) => (p.name ?? '').toLowerCase().includes('blockfrost'));
+        return index >= 0 ? index : undefined;
     }
 
     async getAssetsByStakeKey(stakeKey: string): Promise<AccountAsset[]> {
@@ -128,5 +139,18 @@ export class ChainProviderFailover {
 
     async getAddressUTxOs(bech32Address: string): Promise<ChainProviderAsset[]> {
         return this.getResponse('getAddressUTxOs', [bech32Address]);
+    }
+
+    async getProtocolParameters(): Promise<ChainProtocolParameters> {
+        return this.getResponse('getProtocolParameters', []);
+    }
+
+    async getTxOutputConsumer(txHash: string, outputIndex: number): Promise<string | null> {
+        // Blockfrost answers from its spent-by index in one call; Koios has to scan the address's txs.
+        return this.getResponse('getTxOutputConsumer', [txHash, outputIndex], this.blockfrostIndex());
+    }
+
+    async getAssetOnchainMetadata(policyId: string, hex: string): Promise<Record<string, unknown> | null> {
+        return this.getResponse('getAssetOnchainMetadata', [policyId, hex]);
     }
 }

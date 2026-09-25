@@ -11,3 +11,4 @@ export * from './config';
 export * from './datum/imageDatum';
 export * from './providers/Koios';
 export * from './providers/Blockfrost';
+export * from './datum/cip68Metadata';
