@@ -47,16 +47,23 @@ export interface TxConfirmation {
     validContract?: boolean;
 }
 
-/** Poll until the tx is in a block. A tx in a block with `valid_contract: false` is NOT a success. */
+/**
+ * Poll until the tx is in a block AND Blockfrost serves its UTxOs. Right after inclusion Blockfrost can
+ * answer /txs/<hash> while /txs/<hash>/utxos still 404s (seen on preview: the live suite's reads right
+ * after "confirmed" failed), so "confirmed" means every follow-up read of the tx will answer.
+ * A tx in a block with `valid_contract: false` is NOT a success.
+ */
 export const waitForTxConfirmation = async (chain: ChainConfig, txHash: string, timeoutMs = 180_000, pollMs = 5_000): Promise<TxConfirmation> => {
     const start = Date.now();
-    for (;;) {
-        // A transient provider failure is another poll; a rate limit too long to sit out is returned.
-        const data = await blockfrostGet<{ block: string; valid_contract: boolean }>(chain, `/txs/${txHash}`).catch((error) => {
+    // A transient provider failure is another poll; a rate limit too long to sit out is returned.
+    const poll = <T>(path: string) =>
+        blockfrostGet<T>(chain, path).catch((error) => {
             if (error instanceof RateLimitedError) throw error;
             return null;
         });
-        if (data) return { confirmed: true, block: data.block, validContract: data.valid_contract };
+    for (;;) {
+        const data = await poll<{ block: string; valid_contract: boolean }>(`/txs/${txHash}`);
+        if (data && (await poll(`/txs/${txHash}/utxos`))) return { confirmed: true, block: data.block, validContract: data.valid_contract };
         if (Date.now() - start >= timeoutMs) return { confirmed: false };
         await new Promise((r) => setTimeout(r, pollMs));
     }

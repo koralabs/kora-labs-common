@@ -402,8 +402,23 @@ describe('on-chain assertions', () => {
 
     it('waitForTxConfirmation reports a phase-2 failure instead of treating it as success', async () => {
         let polls = 0;
-        const route: Route = (url) => (url.endsWith('/txs/t2') ? (++polls < 2 ? undefined : { status: 200, body: { block: 'b1', valid_contract: false } }) : undefined);
+        const route: Route = (url) =>
+            url.endsWith('/txs/t2') ? (++polls < 2 ? undefined : { status: 200, body: { block: 'b1', valid_contract: false } }) : url.endsWith('/txs/t2/utxos') ? { status: 200, body: { outputs: [] } } : undefined;
         await expect(waitForTxConfirmation(chain(route), 't2', 1000, 1)).resolves.toEqual({ confirmed: true, block: 'b1', validContract: false });
         await expect(waitForTxConfirmation(chain(() => undefined), 'never', 5, 1)).resolves.toEqual({ confirmed: false });
+    });
+
+    it('waitForTxConfirmation reports confirmed only once Blockfrost also serves the tx UTxOs', async () => {
+        // Seen live: /txs/<hash> answered while /txs/<hash>/utxos still 404'd, and the next read failed.
+        let utxoPolls = 0;
+        const route: Route = (url) => {
+            if (url.endsWith('/txs/t3')) return { status: 200, body: { block: 'b3', valid_contract: true } };
+            if (url.endsWith('/txs/t3/utxos')) return ++utxoPolls < 3 ? undefined : { status: 200, body: { outputs: [] } };
+            return undefined;
+        };
+        await expect(waitForTxConfirmation(chain(route), 't3', 1000, 1)).resolves.toEqual({ confirmed: true, block: 'b3', validContract: true });
+        expect(utxoPolls).toBe(3);
+        const neverReadable: Route = (url) => (url.endsWith('/txs/t4') ? { status: 200, body: { block: 'b4', valid_contract: true } } : undefined);
+        await expect(waitForTxConfirmation(chain(neverReadable), 't4', 20, 1)).resolves.toEqual({ confirmed: false });
     });
 });
