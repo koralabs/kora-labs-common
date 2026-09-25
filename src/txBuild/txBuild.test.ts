@@ -293,6 +293,25 @@ describe('BlockfrostTxClient', () => {
     });
 });
 
+describe('BlockfrostTxClient.getAccount', () => {
+    afterEach(() => resetRateLimits());
+    it('reads a stake address registration and returns null for one the chain has never seen', async () => {
+        const urls: string[] = [];
+        const client = new BlockfrostTxClient({
+            network: 'preview',
+            blockfrostApiKey: 'k',
+            fetcher: async (url) => {
+                urls.push(url);
+                const known = url.endsWith('/stake_test1known');
+                return { ok: known, status: known ? 200 : 404, statusText: '', text: async () => JSON.stringify(known ? { stake_address: 'stake_test1known', active: true } : { status_code: 404, error: 'Not Found', message: 'The requested component has not been found.' }), headers: { get: () => null } };
+            }
+        });
+        expect(await client.getAccount('stake_test1known')).toMatchObject({ active: true });
+        expect(await client.getAccount('stake_test1never')).toBeNull();
+        expect(urls[0]).toBe('https://cardano-preview.blockfrost.io/api/v0/accounts/stake_test1known');
+    });
+});
+
 describe('scalus (local UPLC)', () => {
     const utxos = (fixture.utxos as { input: string; output: string }[]).map(
         ({ input, output }) => [Serialization.TransactionInput.fromCbor(input as never).toCore(), Serialization.TransactionOutput.fromCbor(output as never).toCore()] as Cardano.Utxo
@@ -301,6 +320,9 @@ describe('scalus (local UPLC)', () => {
     // Invariant: parameters applied off-Helios give the validator the chain knows.
     // Negative control: the neighbouring parameter value gives a different hash.
     it('applies a parameter to a compiled Aiken validator and reproduces the deployed script hash', () => {
+        // 171e700e… is the preview HAL policy the fixture tx mints under (mint_version 4 on preview).
+        const minted = Serialization.Transaction.fromCbor(fixture.cbor as Serialization.TxCBOR).body().toCore().mint!;
+        expect([...minted.keys()].some((id) => id.startsWith('171e700eae9a90a34ecbd5c8bbf8caf7e6c71f0d5799d8875cbb93a2'))).toBe(true);
         const mintVersion = (n: number) => [Serialization.PlutusData.newInteger(BigInt(n))];
         expect(plutusScriptHash(applyParamsToScript(fixture.halMintProxyCompiledCode, mintVersion(4)), Cardano.PlutusLanguageVersion.V2)).toBe('171e700eae9a90a34ecbd5c8bbf8caf7e6c71f0d5799d8875cbb93a2');
         expect(plutusScriptHash(applyParamsToScript(fixture.halMintProxyCompiledCode, mintVersion(3)), Cardano.PlutusLanguageVersion.V2)).not.toBe('171e700eae9a90a34ecbd5c8bbf8caf7e6c71f0d5799d8875cbb93a2');
