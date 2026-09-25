@@ -3,6 +3,7 @@
 // Retry-After and friends process-wide.
 import { Cardano, Serialization } from '@cardano-sdk/core';
 import { fetchProviderJson, ProviderRequestOptions } from '../chain/transport/fetchProviderJson';
+import { ChainProtocolParameters } from '../chain/failover/interfaces';
 import { ExUnits, ratio } from './fees';
 import { RedeemerKey, ScriptTxProtocolParameters } from './scriptTx';
 
@@ -76,6 +77,34 @@ export const toOgmiosUtxo = ([txIn, txOut]: Cardano.Utxo) => {
     ];
 };
 
+/**
+ * Tx-builder parameters from provider protocol parameters (Blockfrost `/epochs/latest/parameters`, or
+ * any `ChainProvider.getProtocolParameters()`, e.g. through `ChainProviderFailover`).
+ */
+export const protocolParametersFromChain = (p: ChainProtocolParameters): ScriptTxProtocolParameters => {
+    const raw = p.cost_models_raw as Record<string, number[]> | undefined;
+    if (!raw) throw new Error('Protocol parameters carry no cost_models_raw');
+    // cost_models_raw is the LEDGER-ordered array; the named `cost_models` object is not (its
+    // alphabetical order produced script_data_hash mismatches once the models were extended).
+    const costModels = new Map<Cardano.PlutusLanguageVersion, number[]>();
+    for (const [name, model] of Object.entries(raw)) {
+        const language = PLUTUS_LANGUAGE[name.charAt(0).toLowerCase() + name.slice(1)];
+        if (language !== undefined) costModels.set(language, model);
+    }
+    return {
+        minFeeA: BigInt(p.min_fee_a),
+        minFeeB: BigInt(p.min_fee_b),
+        priceMemory: ratio(p.price_mem),
+        priceSteps: ratio(p.price_step),
+        minFeeRefScriptCostPerByte: ratio(p.min_fee_ref_script_cost_per_byte ?? 0),
+        coinsPerUtxoByte: BigInt(p.coins_per_utxo_size),
+        stakeKeyDeposit: BigInt(p.key_deposit),
+        maxTxSize: Number(p.max_tx_size),
+        maxTxExUnits: { memory: Number(p.max_tx_ex_mem), steps: Number(p.max_tx_ex_steps) },
+        costModels
+    };
+};
+
 export class BlockfrostTxClient {
     private readonly scripts = new Map<string, Promise<BlockfrostScript>>();
     private readonly host: string;
@@ -107,28 +136,7 @@ export class BlockfrostTxClient {
     }
 
     async getProtocolParameters(): Promise<ScriptTxProtocolParameters> {
-        const p = await this.request<Record<string, any>>('epochs/latest/parameters');
-        const raw = p.cost_models_raw as Record<string, number[]> | undefined;
-        if (!raw) throw new Error('Protocol parameters carry no cost_models_raw');
-        // cost_models_raw is the LEDGER-ordered array; the named `cost_models` object is not (its
-        // alphabetical order produced script_data_hash mismatches once the models were extended).
-        const costModels = new Map<Cardano.PlutusLanguageVersion, number[]>();
-        for (const [name, model] of Object.entries(raw)) {
-            const language = PLUTUS_LANGUAGE[name.charAt(0).toLowerCase() + name.slice(1)];
-            if (language !== undefined) costModels.set(language, model);
-        }
-        return {
-            minFeeA: BigInt(p.min_fee_a),
-            minFeeB: BigInt(p.min_fee_b),
-            priceMemory: ratio(p.price_mem),
-            priceSteps: ratio(p.price_step),
-            minFeeRefScriptCostPerByte: ratio(p.min_fee_ref_script_cost_per_byte ?? 0),
-            coinsPerUtxoByte: BigInt(p.coins_per_utxo_size),
-            stakeKeyDeposit: BigInt(p.key_deposit),
-            maxTxSize: Number(p.max_tx_size),
-            maxTxExUnits: { memory: Number(p.max_tx_ex_mem), steps: Number(p.max_tx_ex_steps) },
-            costModels
-        };
+        return protocolParametersFromChain(await this.request<ChainProtocolParameters>('epochs/latest/parameters'));
     }
 
     getLatestBlock(): Promise<{ slot: number; time: number; hash: string; height: number }> {

@@ -144,6 +144,14 @@ const sumValues = (values: Cardano.Value[]) => {
     return { coins, assets };
 };
 
+/** The inputs cannot pay the outputs + fee (+ a min-UTxO change output); `shortfall` more lovelace would. */
+export class InsufficientInputsError extends Error {
+    constructor(message: string, public readonly shortfall: bigint) {
+        super(message);
+        this.name = 'InsufficientInputsError';
+    }
+}
+
 export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProtocolParameters, evaluate: Evaluator): Promise<FinalizedScriptTx> => {
     const inputs = [...plan.inputs].sort((a, b) => byTxIn(a.utxo[0], b.utxo[0]));
     const mint = [...(plan.mint ?? [])].sort((a, b) => hexCompare(a.policyId, b.policyId));
@@ -168,7 +176,7 @@ export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProto
 
     const changeFor = (fee: bigint): Cardano.TxOut => {
         const coins = inValue.coins + withdrawn - deposited - produced.coins - fee;
-        if (coins < BigInt(0)) throw new Error(`Inputs do not cover outputs + fee: ${-coins} lovelace short`);
+        if (coins < BigInt(0)) throw new InsufficientInputsError(`Inputs do not cover outputs + fee: ${-coins} lovelace short`, -coins);
         const assets = new Map<Cardano.AssetId, bigint>();
         const ids = new Set([...inValue.assets.keys(), ...tokenMap.keys(), ...produced.assets.keys()]);
         for (const id of ids) {
@@ -245,8 +253,12 @@ export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProto
     }
 
     const { tx, change, redeemers } = assemble(fee, exUnits, new Map());
-    if (change.value.coins < minAdaForOutputSize(params.coinsPerUtxoByte, outputSize(change))) {
-        throw new Error(`Inputs do not cover outputs + fee: change of ${change.value.coins} lovelace is below min-UTxO`);
+    const changeMinAda = minAdaForOutputSize(params.coinsPerUtxoByte, outputSize(change));
+    if (change.value.coins < changeMinAda) {
+        throw new InsufficientInputsError(
+            `Inputs do not cover outputs + fee: change of ${change.value.coins} lovelace is below min-UTxO`,
+            changeMinAda - change.value.coins
+        );
     }
     const signedSize = sizeOf(fee, exUnits);
     if (signedSize > params.maxTxSize) throw new Error(`Transaction is ${signedSize} bytes, above the ${params.maxTxSize} byte limit`);
@@ -277,6 +289,54 @@ export const selectWalletInputs = (utxos: Cardano.Utxo[], lovelace: bigint, excl
     }
     if (total < lovelace) throw new Error(`Wallet holds ${total} spendable lovelace; ${lovelace} needed`);
     return selected;
+};
+
+const coinsOf = (utxos: Cardano.Utxo[]) => utxos.reduce((sum, [, out]) => sum + out.value.coins, BigInt(0));
+
+export interface WalletFundedPlan extends Omit<ScriptTxPlan, 'inputs' | 'signerCount'> {
+    /** Inputs the tx spends regardless of funding (scripts, tokens being moved); none for a plain payment. */
+    inputs?: ScriptTxPlan['inputs'];
+    /**
+     * The wallet's UTxOs exactly as the wallet handed them over (CIP-30 `getUtxos`), which may include
+     * its own UNCONFIRMED change (tx chaining). They are never looked up on chain.
+     */
+    walletUtxos: Cardano.Utxo[];
+    /** vkey witnesses the signed tx carries once these wallet inputs are chosen. */
+    signerCount: (walletInputs: Cardano.Utxo[]) => number;
+}
+
+/**
+ * Coin selection + finalization in one: walks the `selectWalletInputs` order (ADA-only first, largest
+ * first) one UTxO at a time and returns the first selection `finalizeScriptTx` can balance: inputs
+ * covering outputs + fee with a min-UTxO change output. Pure: no chain reads, so chained (unconfirmed)
+ * wallet UTxOs are spendable. Throws `InsufficientInputsError` (shortfall vs. the whole wallet) when
+ * no selection works.
+ */
+export const finalizeWalletFundedTx = async (
+    { walletUtxos, signerCount, inputs = [], ...plan }: WalletFundedPlan,
+    params: ScriptTxProtocolParameters,
+    evaluate: Evaluator
+): Promise<FinalizedScriptTx & { walletInputs: Cardano.Utxo[] }> => {
+    const available = coinsOf(walletUtxos);
+    let required = plan.outputs.reduce((sum, o) => sum + o.value.coins, BigInt(0));
+    // Each selection is the previous one plus the next UTxO in order (+1 lovelace past its total).
+    for (let lovelace = BigInt(1); lovelace <= available; ) {
+        const walletInputs = selectWalletInputs(walletUtxos, lovelace);
+        const selected = coinsOf(walletInputs);
+        try {
+            const tx = await finalizeScriptTx(
+                { ...plan, inputs: [...inputs, ...walletInputs.map((utxo) => ({ utxo }))], signerCount: signerCount(walletInputs) },
+                params,
+                evaluate
+            );
+            return { ...tx, walletInputs };
+        } catch (error) {
+            if (!(error instanceof InsufficientInputsError)) throw error;
+            required = selected + error.shortfall;
+            lovelace = selected + BigInt(1);
+        }
+    }
+    throw new InsufficientInputsError(`Wallet holds ${available} spendable lovelace; about ${required} needed`, required - available);
 };
 
 /**

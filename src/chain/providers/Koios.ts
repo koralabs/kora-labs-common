@@ -1,8 +1,9 @@
 import { AssetNameLabel } from '../../types';
 import { ICreatorDefaults } from '../../handles/interfaces';
-import { AccountAsset, AddressInfo, ChainProvider, ChainProviderAsset, ChainProviderUtxo } from '../failover/interfaces';
-import { fetchProviderJson } from '../transport/fetchProviderJson';
+import { AccountAsset, AddressInfo, ChainProtocolParameters, ChainProvider, ChainProviderAsset, ChainProviderUtxo } from '../failover/interfaces';
+import { fetchProviderJson, providerNotFoundError } from '../transport/fetchProviderJson';
 import { getImageDataFromDatum } from '../datum/imageDatum';
+import { cip68OnchainMetadata, cip68ReferenceOf } from '../datum/cip68Metadata';
 import { ChainProviderConfig, defaultApiHost } from '../providerConfig';
 
 interface KoiosAsset {
@@ -19,13 +20,21 @@ interface KoiosTxOutput {
     datum_hash: string | null;
     stake_addr: string;
     inline_datum: { bytes: string | null; value: string | null } | null;
-    payment_addr: { bech32: string };
+    /** tx_info outputs carry `payment_addr`; address_utxos / utxo_info rows carry `address` instead. */
+    payment_addr?: { bech32: string };
+    address?: string;
     reference_script: { bytes: string | null; hash: string | null } | null;
 }
+
+/** PostgREST page size Koios serves (its maximum). */
+const KOIOS_PAGE = 1000;
+/** Tx hashes per tx_info request when scanning for an output's consumer. */
+const TX_INFO_BATCH = 50;
 
 interface KoiosTx {
     tx_hash: string;
     outputs: KoiosTxOutput[];
+    inputs?: { tx_hash: string; tx_index: number }[];
 }
 
 interface KoiosMetadata {
@@ -128,7 +137,7 @@ export class Koios implements ChainProvider {
         amount.push({ unit: 'lovelace', quantity: output.value });
 
         const chainProviderAsset: ChainProviderAsset = {
-            address: output.payment_addr.bech32,
+            address: output.address ?? output.payment_addr!.bech32,
             amount,
             inline_datum: output.inline_datum?.bytes ?? null,
             output_index: output.tx_index,
@@ -180,7 +189,7 @@ export class Koios implements ChainProvider {
                 : output.inline_datum?.bytes ?? null;
 
         return {
-            address: output.payment_addr.bech32,
+            address: output.address ?? output.payment_addr!.bech32,
             amount,
             inline_datum,
             output_index: output.tx_index,
@@ -198,6 +207,7 @@ export class Koios implements ChainProvider {
             JSON.stringify({ _tx_hashes: [tx], _metadata: true, _assets: true })
         );
         const [firstTransaction] = res;
+        if (!firstTransaction) throw providerNotFoundError('Koios', `Transaction ${tx}`);
 
         const outputs: ChainProviderAsset[] = [];
         for (const output of firstTransaction?.outputs ?? []) {
@@ -296,16 +306,88 @@ export class Koios implements ChainProvider {
     }
 
     async getAddressUTxOs(bech32Address: string): Promise<ChainProviderAsset[]> {
-        const result = await this.fetchKoios<KoiosTxOutput[]>(
-            `/address_utxos`,
-            'POST',
-            JSON.stringify(buildKoiosAddressUtxoRequestBody(bech32Address))
-        );
-
         const utxos: ChainProviderAsset[] = [];
-        for (const output of result) {
-            utxos.push(await this.buildChainProviderAsset(output));
+        for (let offset = 0; ; offset += KOIOS_PAGE) {
+            const page = await this.fetchKoios<KoiosTxOutput[]>(
+                `/address_utxos?offset=${offset}&limit=${KOIOS_PAGE}`,
+                'POST',
+                JSON.stringify(buildKoiosAddressUtxoRequestBody(bech32Address))
+            );
+            for (const output of page) {
+                utxos.push(await this.buildChainProviderAsset(output));
+            }
+            if (page.length < KOIOS_PAGE) return utxos;
         }
-        return utxos;
+    }
+
+    async getProtocolParameters(): Promise<ChainProtocolParameters> {
+        // The tip's epoch, not the newest epoch_params row: rows for the next epoch can appear before it starts.
+        const [tip] = await this.fetchKoios<{ epoch_no: number }[]>('/tip');
+        const [p] = await this.fetchKoios<any[]>(`/epoch_params?_epoch_no=${tip.epoch_no}`);
+        if (!p) throw providerNotFoundError('Koios', `Protocol parameters for epoch ${tip.epoch_no}`);
+        return {
+            epoch: p.epoch_no,
+            min_fee_a: p.min_fee_a,
+            min_fee_b: p.min_fee_b,
+            max_tx_size: p.max_tx_size,
+            coins_per_utxo_size: String(p.coins_per_utxo_size),
+            key_deposit: String(p.key_deposit),
+            price_mem: p.price_mem,
+            price_step: p.price_step,
+            max_tx_ex_mem: String(p.max_tx_ex_mem),
+            max_tx_ex_steps: String(p.max_tx_ex_steps),
+            min_fee_ref_script_cost_per_byte: p.min_fee_ref_script_cost_per_byte ?? null,
+            cost_models_raw: p.cost_models
+        };
+    }
+
+    async getTxOutputConsumer(txHash: string, outputIndex: number): Promise<string | null> {
+        const ref = `${txHash}#${outputIndex}`;
+        const [utxo] = await this.fetchKoios<{ address: string; block_height: number; is_spent: boolean }[]>(
+            '/utxo_info',
+            'POST',
+            JSON.stringify({ _utxo_refs: [ref], _extended: false })
+        );
+        if (!utxo) throw providerNotFoundError('Koios', `Output ${ref}`);
+        if (!utxo.is_spent) return null;
+
+        // Koios has no spent-by index: scan the txs touching the output's address from its block on
+        // (inclusive: a chained spend can land in the same block) for the one that consumes it.
+        for (let offset = 0; ; offset += KOIOS_PAGE) {
+            const txs = await this.fetchKoios<{ tx_hash: string }[]>(
+                `/address_txs?order=block_height.asc&offset=${offset}&limit=${KOIOS_PAGE}`,
+                'POST',
+                JSON.stringify({ _addresses: [utxo.address], _after_block_height: utxo.block_height })
+            );
+            const candidates = txs.map((t) => t.tx_hash).filter((h) => h !== txHash);
+            for (let i = 0; i < candidates.length; i += TX_INFO_BATCH) {
+                const infos = await this.fetchKoios<KoiosTx[]>(
+                    '/tx_info',
+                    'POST',
+                    JSON.stringify({ _tx_hashes: candidates.slice(i, i + TX_INFO_BATCH), _inputs: true, _metadata: false, _assets: false, _withdrawals: false, _certs: false, _scripts: false, _bytecode: false, _governance: false })
+                );
+                const consumer = infos.find((t) => t.inputs?.some((input) => input.tx_hash === txHash && input.tx_index === outputIndex));
+                if (consumer) return consumer.tx_hash;
+            }
+            if (txs.length < KOIOS_PAGE) break;
+        }
+        throw new Error(`Koios reports ${ref} spent but no tx at ${utxo.address} consumes it`);
+    }
+
+    async getAssetOnchainMetadata(policyId: string, hex: string): Promise<Record<string, unknown> | null> {
+        // Blockfrost's precedence: a CIP-68 user token's reference datum, else the CIP-25 721 entry.
+        const cip68 = cip68ReferenceOf(hex);
+        if (cip68) {
+            const datum = await this.getAssetDatum(policyId, cip68.referenceHex);
+            const metadata = datum ? cip68OnchainMetadata(datum, cip68.standard) : null;
+            if (metadata) return metadata;
+        }
+        const [info] = await this.fetchKoios<{ minting_tx_metadata?: KoiosMetadata }[]>(
+            '/asset_info',
+            'POST',
+            JSON.stringify({ _asset_list: [[policyId, hex]] })
+        );
+        const byPolicy = info?.minting_tx_metadata?.['721']?.[policyId] as Record<string, Record<string, unknown>> | undefined;
+        return byPolicy?.[hex] ?? byPolicy?.[Buffer.from(hex, 'hex').toString('utf8')] ?? null;
     }
 }

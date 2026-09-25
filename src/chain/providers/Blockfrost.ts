@@ -1,7 +1,7 @@
 import { AssetNameLabel } from '../../types';
 import { ICreatorDefaults } from '../../handles/interfaces';
-import { AccountAsset, AddressInfo, ChainProvider, ChainProviderAsset, ChainProviderUtxo } from '../failover/interfaces';
-import { fetchProviderJson } from '../transport/fetchProviderJson';
+import { AccountAsset, AddressInfo, ChainProtocolParameters, ChainProvider, ChainProviderAsset, ChainProviderUtxo } from '../failover/interfaces';
+import { fetchProviderJson, providerNotFoundError } from '../transport/fetchProviderJson';
 import { getImageDataFromDatum } from '../datum/imageDatum';
 import { ChainProviderConfig, defaultApiHost } from '../providerConfig';
 
@@ -177,6 +177,53 @@ export class Blockfrost implements ChainProvider {
     }
 
     async getAddressUTxOs(bech32Address: string): Promise<ChainProviderAsset[]> {
-        return await this.fetchBlockfrost(`/addresses/${bech32Address}/utxos`);
+        // Blockfrost pages at 100: never truncate. An address that never received funds is a 404.
+        const all: ChainProviderAsset[] = [];
+        for (let page = 1; ; page++) {
+            let batch: ChainProviderAsset[];
+            try {
+                batch = await this.fetchBlockfrost(`/addresses/${bech32Address}/utxos?count=100&page=${page}`);
+            } catch (error: any) {
+                if (error?.status === 404) return all;
+                throw error;
+            }
+            all.push(...batch);
+            if (batch.length < 100) return all;
+        }
+    }
+
+    async getProtocolParameters(): Promise<ChainProtocolParameters> {
+        const p = await this.fetchBlockfrost('epochs/latest/parameters');
+        return {
+            epoch: p.epoch,
+            min_fee_a: p.min_fee_a,
+            min_fee_b: p.min_fee_b,
+            max_tx_size: p.max_tx_size,
+            coins_per_utxo_size: String(p.coins_per_utxo_size),
+            key_deposit: String(p.key_deposit),
+            price_mem: p.price_mem,
+            price_step: p.price_step,
+            max_tx_ex_mem: String(p.max_tx_ex_mem),
+            max_tx_ex_steps: String(p.max_tx_ex_steps),
+            min_fee_ref_script_cost_per_byte: p.min_fee_ref_script_cost_per_byte ?? null,
+            cost_models_raw: p.cost_models_raw
+        };
+    }
+
+    async getTxOutputConsumer(txHash: string, outputIndex: number): Promise<string | null> {
+        const { outputs } = await this.getTxUtxos(txHash);
+        const output = (outputs as (ChainProviderAsset & { consumed_by_tx?: string | null })[]).find((o) => o.output_index === outputIndex);
+        if (!output) throw providerNotFoundError('Blockfrost', `Output ${txHash}#${outputIndex}`);
+        return output.consumed_by_tx ?? null;
+    }
+
+    async getAssetOnchainMetadata(policyId: string, hex: string): Promise<Record<string, unknown> | null> {
+        try {
+            const asset = await this.fetchBlockfrost(`/assets/${policyId}${hex}`);
+            return asset?.onchain_metadata ?? null;
+        } catch (error: any) {
+            if (error?.status === 404) return null;
+            throw error;
+        }
     }
 }

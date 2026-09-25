@@ -176,6 +176,10 @@ const createProviderError = ({
     return error;
 };
 
+/** A provider's "that does not exist" answer, shaped like a transport 404 (`status: 404`). */
+export const providerNotFoundError = (provider: ProviderName, what: string): Error =>
+    createProviderError({ provider, status: 404, statusText: `${what} not found` });
+
 const messageLooksRetriable = (value: string): boolean =>
     RETRIABLE_MESSAGE_SNIPPETS.some((snippet) => value.includes(snippet));
 

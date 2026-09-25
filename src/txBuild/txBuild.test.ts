@@ -6,7 +6,7 @@ const fixture = require('./fixtures/previewHalMintTx.json');
 import { BlockfrostEvaluationError, BlockfrostTxClient, toOgmiosUtxo } from './blockfrost';
 import { minFee, ratio, referenceScriptFee, scriptExecutionFee } from './fees';
 import { applyParamsToScript, localEvaluator, plutusScriptHash, toDoubleCbor, toSingleCbor } from './scalus';
-import { addVkeyWitnesses, certificateDeposit, selectWalletInputs, computeScriptDataHash, Evaluator, finalizeScriptTx, ScriptTxProtocolParameters, withMinAda } from './scriptTx';
+import { addVkeyWitnesses, certificateDeposit, selectWalletInputs, computeScriptDataHash, Evaluator, finalizeScriptTx, finalizeWalletFundedTx, InsufficientInputsError, ScriptTxProtocolParameters, withMinAda } from './scriptTx';
 
 setInConwayEra(true);
 
@@ -225,6 +225,47 @@ describe('selectWalletInputs', () => {
         const all = [utxo('1'.repeat(64), 0, BigInt(3), CHANGE_ADDR), withToken('2'.repeat(64), BigInt(100))];
         expect(selectWalletInputs(all, BigInt(50)).map(([i]) => i.txId[0])).toEqual(['1', '2']);
         expect(() => selectWalletInputs(all, BigInt(50), new Set([`${'2'.repeat(64)}#0`]))).toThrow(/3 spendable lovelace; 50 needed/);
+    });
+});
+
+describe('finalizeWalletFundedTx', () => {
+    const ADA = (n: number) => BigInt(Math.round(n * 1_000_000));
+    const noScripts: Evaluator = async () => {
+        throw new Error('a script-free payment must never be evaluated');
+    };
+    const payment = (walletUtxos: Cardano.Utxo[], lovelace: bigint) => ({
+        walletUtxos,
+        outputs: [{ address: SCRIPT_ADDR as Cardano.PaymentAddress, value: { coins: lovelace } }],
+        changeAddress: CHANGE_ADDR,
+        signerCount: () => 1,
+        plutusLanguages: [],
+        referenceScriptBytes: 0
+    });
+
+    it('adds the next UTxO when the smaller selection would leave dust change, and balances at the ledger-minimum fee', async () => {
+        // 10.1 ADA covers 10 ADA + fee but leaves change below min-UTxO: the 5 ADA UTxO must join.
+        const built = await finalizeWalletFundedTx(payment([utxo('1'.repeat(64), 0, ADA(10.1), CHANGE_ADDR), utxo('2'.repeat(64), 0, ADA(5), CHANGE_ADDR)], ADA(10)), params, noScripts);
+        expect(built.walletInputs.map(([i]) => i.txId[0])).toEqual(['1', '2']);
+        expect(built.outputs[1].value.coins).toBe(ADA(15.1) - ADA(10) - built.fee);
+        const signed = addVkeyWitnesses(built.cbor, [{ vkey: '7'.repeat(64), signature: 'ab'.repeat(64) }]);
+        expect(built.fee).toBe(minFee(params, signed.length / 2, [], 0));
+    });
+
+    it('stops at the first selection that works (largest ADA-only first; token UTxOs untouched)', async () => {
+        const token: Cardano.Utxo = [utxo('9'.repeat(64), 0, ADA(500), CHANGE_ADDR)[0], { address: CHANGE_ADDR as Cardano.PaymentAddress, value: { coins: ADA(500), assets: new Map([[Cardano.AssetId(`${POLICY_A}01`), BigInt(1)]]) } }];
+        const built = await finalizeWalletFundedTx(payment([utxo('1'.repeat(64), 0, ADA(3), CHANGE_ADDR), token, utxo('3'.repeat(64), 0, ADA(40), CHANGE_ADDR)], ADA(30)), params, noScripts);
+        expect(built.walletInputs.map(([i]) => i.txId[0])).toEqual(['3']);
+    });
+
+    it('throws InsufficientInputsError with the shortfall against the whole wallet', async () => {
+        const wallet = [utxo('1'.repeat(64), 0, ADA(25), CHANGE_ADDR)];
+        const error = await finalizeWalletFundedTx(payment(wallet, ADA(30)), params, noScripts).catch((e) => e);
+        expect(error).toBeInstanceOf(InsufficientInputsError);
+        expect(error.shortfall).toBe(ADA(5)); // 30 ADA needed at fee 0; the builder never got further
+        const dust = await finalizeWalletFundedTx(payment(wallet, ADA(24.9)), params, noScripts).catch((e) => e);
+        expect(dust).toBeInstanceOf(InsufficientInputsError); // covers 24.9 + fee but not a min-UTxO change
+        expect(dust.shortfall).toBeGreaterThan(BigInt(0));
+        expect(await finalizeWalletFundedTx(payment([], ADA(1)), params, noScripts).catch((e) => e)).toBeInstanceOf(InsufficientInputsError);
     });
 });
 
