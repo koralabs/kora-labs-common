@@ -147,6 +147,13 @@ export const isWriteTimeoutError = (error: unknown): boolean =>
     error instanceof errors.ResponseError && error.code === types.responseErrorCodes.writeTimeout;
 
 /**
+ * An LWT whose outcome is unknown: the coordinator reported a write timeout, or it never replied within
+ * the driver's readTimeout ("The host … did not reply before timeout") — either way it may have committed.
+ */
+export const isUnknownOutcomeError = (error: unknown): boolean =>
+    isWriteTimeoutError(error) || error instanceof errors.OperationTimedOutError;
+
+/**
  * The directly testable LWT operation. Each invocation owns a unique token, so
  * concurrent ticks on one node cannot both treat the node identity as ownership.
  */
@@ -187,7 +194,7 @@ export const acquireWithExecutor = async (
         if (mode === 'serial' && isPeerUnavailableError(error)) {
             return { status: 'peerUnavailable', token, message };
         }
-        if (isWriteTimeoutError(error)) {
+        if (isUnknownOutcomeError(error)) {
             // The LWT timed out: it may have been applied WITH OUR TOKEN, in which case nobody (not even
             // us) could run until the lease expired. A read at the same serial consistency completes any
             // in-flight Paxos round, so it tells us the real owner.
@@ -255,24 +262,57 @@ export const acquire = async (name: string, offline?: string | null, options: { 
     }
 };
 
-/** Release only the exact acquisition token owned by this invocation. */
+export type ReleaseResult = { status: 'released' } | { status: 'unknown'; message: string };
+
+/**
+ * Release only the exact acquisition token owned by this invocation. The conditional DELETE is an LWT
+ * too: when it fails its outcome is unknown, and a surviving row would idle the job on every box for
+ * the whole lease. A serial read completes any in-flight Paxos round and tells whether the row is still
+ * ours; if it is, the (token-conditional) delete is issued once more.
+ */
+export const releaseWithExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    token: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology
+): Promise<ReleaseResult> => {
+    const mode = resolveMode(parseOffline(offline), topology);
+    if (mode === 'standDown') return { status: 'released' };
+    const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
+    const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
+    const key = scopeName(name, topology);
+
+    try {
+        await executor.execute(`DELETE FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ? IF owner = ?`, [key, token], { prepare: true, serialConsistency, consistency });
+        return { status: 'released' };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const read = await readOwner(executor, key, serialConsistency);
+        if (read.error) return { status: 'unknown', message: `${message}; owner read failed (${read.error})` };
+        if (read.owner !== token) return { status: 'released' };
+        return (await deleteIfOwner(executor, key, token, serialConsistency, consistency))
+            ? { status: 'released' }
+            : { status: 'unknown', message: `${message}; the row is still ours and the second delete failed` };
+    }
+};
+
 export const release = async (name: string, token: string, offline?: string | null): Promise<void> => {
     try {
         const topology = resolveTopology();
-        const mode = resolveMode(parseOffline(offline), topology);
-        if (mode === 'standDown') return;
-        const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
-        const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
-        await getClient(topology).execute(
-            `DELETE FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ? IF owner = ?`,
-            [scopeName(name, topology), token],
-            { prepare: true, serialConsistency, consistency }
-        );
+        const result = await releaseWithExecutor(getClient(topology), name, token, offline, topology);
+        if (result.status === 'unknown') {
+            Logger.log({
+                message: `cron lock '${name}' release failed; if the row survived, '${name}' idles on every box until its lease expires: ${result.message}`,
+                event: 'cqlCronLock.release.unknown',
+                category: LogCategory.WARN
+            });
+        }
     } catch (error) {
         Logger.log({
-            message: `cron lock '${name}' release best-effort failed (TTL will reclaim): ${(error as Error).message}`,
-            event: 'cqlCronLock.release.softfail',
-            category: LogCategory.INFO
+            message: `cron lock '${name}' release failed (TTL will reclaim): ${(error as Error).message}`,
+            event: 'cqlCronLock.release.unknown',
+            category: LogCategory.WARN
         });
     }
 };
