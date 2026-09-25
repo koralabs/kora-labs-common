@@ -6,6 +6,7 @@ import {
     CqlExecutor,
     CronLockTopology,
     leaseMs,
+    releaseWithExecutor,
     resolveMode,
     resolveTopology
 } from './cqlCronLock';
@@ -187,5 +188,110 @@ describe('CQL cron-lock acquisition', () => {
         rows.set('preview:lock', 'rdm:other');
         assert.equal((await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:me')).status, 'unavailable');
         assert.equal(rows.get('preview:lock'), 'rdm:other');
+    });
+
+    // Invariant: a coordinator that never replied (client-side readTimeout) leaves the LWT outcome just as
+    // unknown as a server write timeout, so it is resolved the same way.
+    // Failure caught: OperationTimedOutError ("The host … did not reply before timeout 12000 ms", seen on
+    // the SFO/RDM pair) skipped the owner read, so an INSERT that had committed idled every box for the lease.
+    // Negative control: classifying only ResponseError.writeTimeout returns 'unavailable' and leaves the row.
+    it('resolves an acquisition whose coordinator never replied like a write timeout', async () => {
+        const rows = new Map<string, string>();
+        const executor: CqlExecutor = {
+            async execute(query, params = []) {
+                if (query.startsWith('INSERT')) {
+                    if (!rows.has(params[0] as string)) rows.set(params[0] as string, params[1] as string);
+                    throw new errors.OperationTimedOutError('The host 100.94.227.122:9042 did not reply before timeout 12000 ms');
+                }
+                if (query.startsWith('SELECT')) return { rows: rows.has(params[0] as string) ? [{ owner: rows.get(params[0] as string) }] : [] };
+                throw new Error(`unexpected ${query}`);
+            }
+        };
+        assert.deepEqual(await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:me'), { status: 'acquired', token: 'sfo:me' });
+        assert.equal(rows.get('preview:lock'), 'sfo:me');
+    });
+});
+
+describe('CQL cron-lock release', () => {
+    /** kora_locks.cron_lock with LWT semantics, whose DELETEs fail per `deleteFailures` (after or before committing). */
+    const lockTable = (deleteFailures: Array<'appliedThenTimeout' | 'timeout'>, readFails = false) => {
+        const rows = new Map<string, string>();
+        let deletes = 0;
+        const executor: CqlExecutor = {
+            async execute(query, params = []) {
+                const [name, owner] = params as string[];
+                if (query.startsWith('SELECT')) {
+                    if (readFails) throw responseError(types.responseErrorCodes.readTimeout);
+                    return { rows: rows.has(name) ? [{ owner: rows.get(name) }] : [] };
+                }
+                if (query.startsWith('DELETE')) {
+                    const failure = deleteFailures[deletes++];
+                    if (failure === 'timeout') throw responseError(types.responseErrorCodes.writeTimeout);
+                    const applied = rows.get(name) === owner;
+                    if (applied) rows.delete(name);
+                    if (failure === 'appliedThenTimeout') throw new errors.OperationTimedOutError('The host 100.124.13.105:9042 did not reply before timeout 12000 ms');
+                    return { rows: [{ '[applied]': applied }] };
+                }
+                throw new Error(`unexpected ${query}`);
+            }
+        };
+        return { rows, executor, deletes: () => deletes };
+    };
+
+    // Invariant: a finished job's lock row does not outlive it because its DELETE timed out.
+    // Failure caught: live mainnet 2026-09-24 21:45 UTC, "release best-effort failed (TTL will reclaim): Server
+    // timeout during write query at consistency SERIAL" for mintPaidSessionsLock — an uncommitted delete left
+    // the row, and no box could mint until the 30-minute lease expired.
+    // Negative control: the previous release (one DELETE, errors swallowed) leaves 'sfo:me' in the table.
+    it('deletes its row again when a timed-out DELETE did not commit', async () => {
+        const table = lockTable(['timeout']);
+        table.rows.set('preview:lock.mintPaidSessionsLock', 'sfo:me');
+        assert.deepEqual(await releaseWithExecutor(table.executor, 'lock.mintPaidSessionsLock', 'sfo:me', 'none', topology), { status: 'released' });
+        assert.equal(table.rows.size, 0);
+        assert.equal(table.deletes(), 2);
+    });
+
+    it('does not delete again when the timed-out DELETE had committed', async () => {
+        const table = lockTable(['appliedThenTimeout']);
+        table.rows.set('preview:lock', 'sfo:me');
+        assert.deepEqual(await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'none', topology), { status: 'released' });
+        assert.equal(table.rows.size, 0);
+        assert.equal(table.deletes(), 1);
+    });
+
+    // Invariant: release never frees another invocation's lock, even while resolving a timeout.
+    it('leaves a row another box acquired after our timed-out DELETE', async () => {
+        const table = lockTable(['appliedThenTimeout']);
+        table.rows.set('preview:lock', 'sfo:me');
+        const racing: CqlExecutor = {
+            async execute(query, params, options) {
+                const result = await table.executor.execute(query, params, options).catch((error) => {
+                    table.rows.set('preview:lock', 'rdm:other'); // the peer won the freed lock before our read
+                    throw error;
+                });
+                return result;
+            }
+        };
+        assert.deepEqual(await releaseWithExecutor(racing, 'lock', 'sfo:me', 'none', topology), { status: 'released' });
+        assert.equal(table.rows.get('preview:lock'), 'rdm:other');
+        assert.equal(table.deletes(), 1);
+    });
+
+    // Failure case: when neither the delete nor the owner read succeeds, the outcome is reported as unknown
+    // (the caller logs a WARN; the lease TTL is the remaining recovery).
+    it('reports an unknown release when the owner cannot be read', async () => {
+        const table = lockTable(['timeout'], true);
+        table.rows.set('preview:lock', 'sfo:me');
+        const result = await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'none', topology);
+        assert.equal(result.status, 'unknown');
+        assert.match((result as { message: string }).message, /owner read failed/);
+        assert.equal(table.rows.get('preview:lock'), 'sfo:me');
+    });
+
+    it('stands down without touching the table on a box declared offline', async () => {
+        const table = lockTable([]);
+        table.rows.set('preview:lock', 'sfo:me');
+        assert.deepEqual(await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'sfo', topology), { status: 'released' });
+        assert.equal(table.deletes(), 0);
     });
 });
