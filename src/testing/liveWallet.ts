@@ -4,6 +4,10 @@
  * Real keys derived from a mnemonic (CIP-1852), real UTxOs from Blockfrost, real signatures, real
  * submission. It behaves like a real CIP-30 wallet on purpose:
  *   - getUtxos returns the FULL paginated UTxO set (no hidden/"parked" collateral),
+ *   - it CHAINS like Eternl/Lace: once it has submitted a tx, getUtxos (and getBalance, and the
+ *     signing-key choice) return that tx's outputs to this wallet and drop the inputs it spent, until
+ *     the tx is in a block — then chain truth takes over. A dapp therefore receives UTxOs that exist
+ *     on no provider yet, exactly as real users' wallets hand them over (HAL minting depends on it),
  *   - getCollateral returns null (the common real-wallet case — the app must resolve collateral),
  *   - signTx returns a witness set holding ONLY this wallet's vkey witnesses (the app merges it),
  *   - signTx refuses non-canonical tx structure (hardware wallets / Eternl do).
@@ -11,11 +15,10 @@
  */
 import { blake2b } from 'blakejs';
 import { bech32 } from 'bech32';
-import { assertCanonicalCbor } from '../tx';
+import { assertCanonicalCbor, txHashFromCbor } from '../tx';
+import { blockfrostGet, blockfrostSubmit, LiveNetwork } from './blockfrost';
 
 const HARDENED = 0x80000000;
-
-export type LiveNetwork = 'preview' | 'preprod' | 'mainnet';
 
 export interface LiveWalletConfig {
     mnemonic: string;
@@ -29,6 +32,18 @@ export interface LiveWalletConfig {
     fetchFn?: typeof fetch;
 }
 
+/** One tx this wallet submitted, with the chaining facts a suite asserts on. */
+export interface LiveSubmission {
+    txHash: string;
+    /** Local clock (ms) when the submission was accepted. */
+    submittedAt: number;
+    /**
+     * Inputs (`txHash#index`) that were outputs of this wallet's OWN earlier submissions that were not
+     * in a block yet when this tx was submitted — i.e. the tx is chained on unconfirmed change.
+     */
+    chainedInputs: string[];
+}
+
 export interface LiveWallet {
     address: string;
     addressHex: string;
@@ -40,6 +55,10 @@ export interface LiveWallet {
     dRepId: string;
     call: (method: string, params?: unknown) => Promise<unknown>;
     submittedTxHashes: string[];
+    /** Every accepted submission, in order (`submittedTxHashes` is the hash-only view). */
+    submissions: LiveSubmission[];
+    /** Hashes of submitted txs this wallet has not yet seen in a block. */
+    pendingTxHashes: () => string[];
     countUtxos: () => Promise<number>;
 }
 
@@ -77,14 +96,10 @@ const loadSdk = () => {
     return sdkPromise;
 };
 
-export const blockfrostBaseUrl = (network: LiveNetwork) => `https://cardano-${network}.blockfrost.io/api/v0`;
-
-
 export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWallet> => {
     const { Cardano, Serialization, Crypto, bip39 } = await loadSdk();
-    const doFetch = config.fetchFn ?? fetch;
+    const access = { network: config.network, blockfrostApiKey: config.blockfrostApiKey, fetchFn: config.fetchFn };
     const networkId = config.network === 'mainnet' ? 1 : 0;
-    const base = blockfrostBaseUrl(config.network);
     const account = config.accountIndex ?? 0;
 
     const root = Crypto.Bip32PrivateKey.fromBip39Entropy(Buffer.from(bip39.mnemonicToEntropy(config.mnemonic), 'hex'), '');
@@ -110,24 +125,26 @@ export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWa
     const dRepKeyHash = blake2b(Buffer.from(dRepPubKeyHex, 'hex'), undefined, 28);
     const dRepId = bech32.encode('drep', bech32.toWords(Uint8Array.from([0x22, ...dRepKeyHash])), 128);
 
-    const submittedTxHashes: string[] = [];
+    const ownAddresses = new Set([address, enterpriseStakeAddress]);
 
-    const fetchBlockfrost = async (path: string) => {
-        const res = await doFetch(`${base}${path}`, { headers: { project_id: config.blockfrostApiKey } });
-        if (!res.ok) throw new Error(`Blockfrost ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-        return res;
-    };
+    const submittedTxHashes: string[] = [];
+    const submissions: LiveSubmission[] = [];
+
+    // ── Chaining state: this wallet's submitted txs that are not in a block yet ─────────────────
+    // `spends` are the inputs it consumed; `outputs` are its outputs back to this wallet (exact
+    // ledger CBOR, keyed `txHash#index`, with the address so the signer choice can use them).
+    interface PendingTx {
+        spends: Set<string>;
+        outputs: Map<string, { cbor: string; address: string; lovelace: bigint }>;
+    }
+    const pending = new Map<string, PendingTx>();
 
     const fetchAddressUtxos = async (addr: string): Promise<BlockfrostUtxo[]> => {
         const all: BlockfrostUtxo[] = [];
         for (let page = 1; ; page++) {
-            const res = await doFetch(`${base}/addresses/${addr}/utxos?count=100&page=${page}`, {
-                headers: { project_id: config.blockfrostApiKey }
-            });
-            // 404 = the address has never been used — an empty set, not an error.
-            if (res.status === 404) break;
-            if (!res.ok) throw new Error(`Blockfrost /addresses/${addr}/utxos: ${res.status} ${(await res.text()).slice(0, 200)}`);
-            const batch = (await res.json()) as BlockfrostUtxo[];
+            // null (404) = the address has never been used — an empty set, not an error.
+            const batch = await blockfrostGet<BlockfrostUtxo[]>(access, `/addresses/${addr}/utxos?count=100&page=${page}`);
+            if (!batch) break;
             for (const u of batch) u._sourceAddr = addr;
             all.push(...batch);
             if (batch.length < 100) break;
@@ -151,29 +168,52 @@ export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWa
         ).toCbor() as string;
     };
 
-    const getUtxos = async (): Promise<string[]> => {
-        const utxos = [...(await fetchAddressUtxos(address)), ...(await fetchAddressUtxos(enterpriseStakeAddress))];
-        return utxos.map(utxoToCborHex);
+    /** A pending tx that is now in a block leaves the overlay: chain truth takes over. */
+    const settlePending = async () => {
+        for (const txHash of [...pending.keys()]) {
+            if (await blockfrostGet(access, `/txs/${txHash}`)) pending.delete(txHash);
+        }
     };
 
+    interface OwnUtxo {
+        cbor: string;
+        address: string;
+        lovelace: bigint;
+    }
+
+    /** The wallet's own view: chain UTxOs, minus what its pending txs spent, plus their unspent change. */
+    const ownUtxos = async (): Promise<Map<string, OwnUtxo>> => {
+        await settlePending();
+        const chainUtxos = [...(await fetchAddressUtxos(address)), ...(await fetchAddressUtxos(enterpriseStakeAddress))];
+        const spent = new Set([...pending.values()].flatMap((p) => [...p.spends]));
+        const view = new Map<string, OwnUtxo>();
+        for (const u of chainUtxos) {
+            const ref = `${u.tx_hash}#${u.output_index}`;
+            if (spent.has(ref)) continue;
+            view.set(ref, { cbor: utxoToCborHex(u), address: u._sourceAddr ?? address, lovelace: BigInt(u.amount.find((a) => a.unit === 'lovelace')?.quantity ?? '0') });
+        }
+        for (const p of pending.values()) {
+            for (const [ref, out] of p.outputs) if (!spent.has(ref)) view.set(ref, out);
+        }
+        return view;
+    };
+
+    const getUtxos = async (): Promise<string[]> => [...(await ownUtxos()).values()].map((u) => u.cbor);
+
     const getBalance = async (): Promise<string> => {
-        const utxos = await fetchAddressUtxos(address);
-        const coins = utxos.reduce((sum, u) => sum + BigInt(u.amount.find((a) => a.unit === 'lovelace')?.quantity ?? '0'), BigInt(0));
+        const coins = [...(await ownUtxos()).values()].filter((u) => u.address === address).reduce((sum, u) => sum + u.lovelace, BigInt(0));
         return Serialization.Value.fromCore({ coins }).toCbor() as string;
     };
 
-    // The stake key must sign when it is a required signer, or when the tx spends/collateralizes a
-    // UTxO whose PAYMENT credential is the stake key (EnterpriseAddress(stakeCredential)).
+    // The stake key must sign when it is a required signer, or when the tx spends/collateralizes one of
+    // this wallet's UTxOs whose PAYMENT credential is the stake key (EnterpriseAddress(stakeCredential)).
+    // Resolved from the wallet's own view, like a real wallet: chained inputs are on no provider yet.
     const needsStakeKeySignature = async (body: ReturnType<InstanceType<typeof Serialization.TransactionBody>['toCore']>) => {
         if ((body.requiredExtraSignatures ?? []).some((s) => s === stakeKeyHash)) return true;
         const inputs = [...(body.inputs ?? []), ...(body.collaterals ?? [])];
-        for (const input of inputs) {
-            const res = await fetchBlockfrost(`/txs/${input.txId}/utxos`);
-            const json = (await res.json()) as { outputs?: { address?: string; output_index?: number }[] };
-            const out = json.outputs?.find((o, i) => (o.output_index ?? i) === input.index);
-            if (out?.address === enterpriseStakeAddress) return true;
-        }
-        return false;
+        if (inputs.length === 0) return false;
+        const view = await ownUtxos();
+        return inputs.some((input) => view.get(`${input.txId}#${input.index}`)?.address === enterpriseStakeAddress);
     };
 
     const signTx = async (txCborHex: string): Promise<string> => {
@@ -194,6 +234,23 @@ export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWa
         return out;
     };
 
+    /** Record an accepted submission: its spent inputs leave the view, its own outputs join it. */
+    const trackSubmitted = (txHash: string, signedTxCbor: string) => {
+        const body = Serialization.Transaction.fromCbor(signedTxCbor as never).body();
+        const spends = new Set(body.inputs().values().map((i) => `${i.transactionId()}#${Number(i.index())}`));
+        const chainedInputs = [...spends].filter((ref) => pending.has(ref.split('#')[0]));
+        const outputs = new Map<string, OwnUtxo>();
+        body.outputs().forEach((output, index) => {
+            const outAddress = output.address().toBech32();
+            if (!ownAddresses.has(outAddress)) return;
+            const cbor = new Serialization.TransactionUnspentOutput(Serialization.TransactionInput.fromCore({ txId: txHash as never, index }), output).toCbor() as string;
+            outputs.set(`${txHash}#${index}`, { cbor, address: outAddress, lovelace: output.amount().coin() });
+        });
+        pending.set(txHash, { spends, outputs });
+        submittedTxHashes.push(txHash);
+        submissions.push({ txHash, submittedAt: Date.now(), chainedInputs });
+    };
+
     const submitTx = async (signedTxCbor: string): Promise<string> => {
         if (config.submitDumpDir) {
             const fs = await import('node:fs');
@@ -201,27 +258,13 @@ export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWa
             fs.mkdirSync(config.submitDumpDir, { recursive: true });
             fs.writeFileSync(path.join(config.submitDumpDir, `submit-${Date.now()}.cbor.hex`), signedTxCbor);
         }
-        // Retry only transient failures (429/5xx). Any other 4xx is a real ledger rejection and
-        // surfaces immediately with Blockfrost's full reason.
-        const backoffsMs = [0, 1000, 4000, 10000];
-        let lastError = '';
-        for (const wait of backoffsMs) {
-            if (wait) await new Promise((r) => setTimeout(r, wait));
-            const res = await doFetch(`${base}/tx/submit`, {
-                method: 'POST',
-                headers: { project_id: config.blockfrostApiKey, 'Content-Type': 'application/cbor' },
-                body: Buffer.from(signedTxCbor, 'hex')
-            });
-            const text = await res.text();
-            if (res.ok) {
-                const hash = text.replace(/"/g, '');
-                submittedTxHashes.push(hash);
-                return hash;
-            }
-            lastError = `${res.status} ${text.slice(0, 4000)}`;
-            if (!(res.status === 429 || res.status >= 500)) break;
-        }
-        throw new Error(`Submit failed: ${lastError}`);
+        // Transient failures (5xx) are retried by the transport; rate limits wait exactly the stated
+        // time; any other 4xx is a real ledger rejection and surfaces with Blockfrost's reason.
+        const hash = await blockfrostSubmit(access, signedTxCbor);
+        const expected = txHashFromCbor(signedTxCbor);
+        if (hash !== expected) throw new Error(`Submit returned ${hash} for tx ${expected}`);
+        trackSubmitted(hash, signedTxCbor);
+        return hash;
     };
 
     // CIP-8 COSE_Sign1 over the payload with the payment key (CIP-30 signData).
@@ -294,7 +337,9 @@ export const createLiveWallet = async (config: LiveWalletConfig): Promise<LiveWa
         dRepId,
         call,
         submittedTxHashes,
-        countUtxos: async () => (await fetchAddressUtxos(address)).length
+        submissions,
+        pendingTxHashes: () => [...pending.keys()],
+        countUtxos: async () => [...(await ownUtxos()).values()].filter((u) => u.address === address).length
     };
 };
 

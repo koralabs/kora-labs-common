@@ -1,9 +1,11 @@
 /**
  * On-chain EFFECT assertions for live journey suites. Chain truth via Blockfrost — never the
- * indexer or the UI. Each assertion throws on mismatch so the calling scope fails.
+ * indexer or the UI. Each assertion throws on mismatch so the calling scope fails. Blockfrost is
+ * reached through the shared rate-limited transport (./blockfrost).
  */
 import cbor from 'cbor';
-import { blockfrostBaseUrl, LiveNetwork } from './liveWallet';
+import { RateLimitedError } from '../chain/transport/rateLimit';
+import { BlockfrostAccess, blockfrostGet } from './blockfrost';
 
 export const LBL_222 = '000de140'; // CIP-68 user/owner NFT
 export const LBL_100 = '000643b0'; // CIP-68 reference token
@@ -12,11 +14,7 @@ export const LBL_444 = '001bc280'; // CIP-68 RFT
 
 export const hexOf = (s: string) => Buffer.from(s, 'utf8').toString('hex');
 
-export interface ChainConfig {
-    network: LiveNetwork;
-    blockfrostApiKey: string;
-    fetchFn?: typeof fetch;
-}
+export type ChainConfig = BlockfrostAccess;
 
 export interface TxUtxoOutput {
     address: string;
@@ -33,13 +31,10 @@ export interface TxUtxos {
     outputs: TxUtxoOutput[];
 }
 
-const get = async (chain: ChainConfig, path: string) =>
-    (chain.fetchFn ?? fetch)(`${blockfrostBaseUrl(chain.network)}${path}`, { headers: { project_id: chain.blockfrostApiKey } });
-
 const getJson = async <T>(chain: ChainConfig, path: string): Promise<T> => {
-    const res = await get(chain, path);
-    if (!res.ok) throw new Error(`onChain: GET ${path} failed (${res.status})`);
-    return (await res.json()) as T;
+    const found = await blockfrostGet<T>(chain, path);
+    if (found === null) throw new Error(`onChain: GET ${path} failed (404)`);
+    return found;
 };
 
 export const fetchTxUtxos = (chain: ChainConfig, txHash: string) => getJson<TxUtxos>(chain, `/txs/${txHash}/utxos`);
@@ -56,11 +51,12 @@ export interface TxConfirmation {
 export const waitForTxConfirmation = async (chain: ChainConfig, txHash: string, timeoutMs = 180_000, pollMs = 5_000): Promise<TxConfirmation> => {
     const start = Date.now();
     for (;;) {
-        const res = await get(chain, `/txs/${txHash}`).catch(() => null);
-        if (res?.ok) {
-            const data = (await res.json()) as { block: string; valid_contract: boolean };
-            return { confirmed: true, block: data.block, validContract: data.valid_contract };
-        }
+        // A transient provider failure is another poll; a rate limit too long to sit out is returned.
+        const data = await blockfrostGet<{ block: string; valid_contract: boolean }>(chain, `/txs/${txHash}`).catch((error) => {
+            if (error instanceof RateLimitedError) throw error;
+            return null;
+        });
+        if (data) return { confirmed: true, block: data.block, validContract: data.valid_contract };
         if (Date.now() - start >= timeoutMs) return { confirmed: false };
         await new Promise((r) => setTimeout(r, pollMs));
     }
@@ -88,25 +84,22 @@ export const waitForOutputConsumed = async (
 /** Assert `<policy><label><name>` exists with quantity > 0 and, optionally, that another label does NOT exist. */
 export const assertCip68Label = async (chain: ChainConfig, policyId: string, name: string, opts: { hasLabel: string; notLabel?: string }) => {
     const nameHex = hexOf(name);
-    const present = await get(chain, `/assets/${policyId}${opts.hasLabel}${nameHex}`);
-    if (!present.ok) throw new Error(`onChain: expected asset ${opts.hasLabel}+${name} under ${policyId} (${present.status})`);
-    const quantity = BigInt(((await present.json()) as { quantity?: string }).quantity ?? '0');
+    const present = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${policyId}${opts.hasLabel}${nameHex}`);
+    if (!present) throw new Error(`onChain: expected asset ${opts.hasLabel}+${name} under ${policyId} (not found)`);
+    const quantity = BigInt(present.quantity ?? '0');
     if (quantity <= BigInt(0)) throw new Error(`onChain: asset ${opts.hasLabel}+${name} has zero quantity`);
     if (opts.notLabel) {
-        const forbidden = await get(chain, `/assets/${policyId}${opts.notLabel}${nameHex}`);
-        if (forbidden.ok) {
-            const fq = BigInt(((await forbidden.json()) as { quantity?: string }).quantity ?? '0');
-            if (fq > BigInt(0)) throw new Error(`onChain: asset ${opts.notLabel}+${name} must NOT exist (quantity ${fq})`);
-        }
+        const forbidden = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${policyId}${opts.notLabel}${nameHex}`);
+        const fq = BigInt(forbidden?.quantity ?? '0');
+        if (fq > BigInt(0)) throw new Error(`onChain: asset ${opts.notLabel}+${name} must NOT exist (quantity ${fq})`);
     }
 };
 
 /** Assert an asset's total on-chain quantity is 0 (burned). */
 export const assertAssetBurned = async (chain: ChainConfig, assetUnit: string) => {
-    const res = await get(chain, `/assets/${assetUnit}`);
-    if (res.status === 404) return;
-    if (!res.ok) throw new Error(`onChain: asset lookup failed (${res.status})`);
-    const quantity = ((await res.json()) as { quantity?: string }).quantity ?? '0';
+    const asset = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${assetUnit}`);
+    if (!asset) return;
+    const quantity = asset.quantity ?? '0';
     if (BigInt(quantity) !== BigInt(0)) throw new Error(`onChain: expected ${assetUnit} burned, quantity is ${quantity}`);
 };
 

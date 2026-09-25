@@ -1,6 +1,7 @@
 import { Cardano, Serialization } from '@cardano-sdk/core';
 import * as Crypto from '@cardano-sdk/crypto';
 import vm from 'node:vm';
+import { resetRateLimits } from '../chain/transport/rateLimit';
 import { mergeWitnessSet, txHashFromCbor } from '../tx';
 import { buildCip30InitScript, createBridgeHandler, installLiveCip30Wallet } from './installWallet';
 import { createLiveWallet, LiveWallet } from './liveWallet';
@@ -13,14 +14,14 @@ const MNEMONIC = 'test walk nut penalty hip pave soap entry language right filte
 const CIP19_ENTERPRISE_ADDRESS = 'addr_test1vz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerspjrlsz';
 const CIP19_PAYMENT_KEY_HASH = '9493315cd92eb5d8c4304e67b7e16ae36d61d34502694657811a2c8e';
 
-type Route = (url: string, init?: RequestInit) => { status: number; body: unknown } | undefined;
+type Route = (url: string, init?: RequestInit) => { status: number; body: unknown; headers?: Record<string, string> } | undefined;
 
 const fakeFetch = (route: Route, calls: string[] = []) =>
     (async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         calls.push(`${init?.method ?? 'GET'} ${url}`);
-        const hit = route(url, init) ?? { status: 404, body: { error: 'Not Found' } };
-        return new Response(typeof hit.body === 'string' ? hit.body : JSON.stringify(hit.body), { status: hit.status });
+        const hit = route(url, init) ?? { status: 404, body: { status_code: 404, error: 'Not Found', message: 'The requested component has not been found.' } };
+        return new Response(typeof hit.body === 'string' ? hit.body : JSON.stringify(hit.body), { status: hit.status, headers: hit.headers });
     }) as typeof fetch;
 
 const utxo = (txHash: string, index: number, lovelace: number) => ({
@@ -123,11 +124,12 @@ describe('createLiveWallet', () => {
 
     it('submits to Blockfrost, retries transient errors, and surfaces permanent rejections', async () => {
         let attempts = 0;
-        const flaky: Route = (url) => (url.endsWith('/tx/submit') ? (++attempts === 1 ? { status: 503, body: 'busy' } : { status: 200, body: '"abc123"' }) : undefined);
+        const txId = txHashFromCbor(unsignedTx());
+        const flaky: Route = (url) => (url.endsWith('/tx/submit') ? (++attempts === 1 ? { status: 503, body: 'busy' } : { status: 200, body: `"${txId}"` }) : undefined);
         const wallet = await createLiveWallet({ mnemonic: MNEMONIC, network: 'preview', blockfrostApiKey: 'k', fetchFn: fakeFetch(flaky) });
-        await expect(wallet.call('submitTx', unsignedTx())).resolves.toBe('abc123');
+        await expect(wallet.call('submitTx', unsignedTx())).resolves.toBe(txId);
         expect(attempts).toBe(2);
-        expect(wallet.submittedTxHashes).toEqual(['abc123']);
+        expect(wallet.submittedTxHashes).toEqual([txId]);
 
         const rejecting = await createLiveWallet({
             mnemonic: MNEMONIC,
@@ -144,6 +146,166 @@ describe('createLiveWallet', () => {
         expect(wallet.address.startsWith('addr1')).toBe(true);
         expect(await wallet.call('getCollateral')).toBeNull();
         await expect(wallet.call('stealKeys')).rejects.toThrow('Unknown CIP-30 method');
+    });
+});
+
+/**
+ * In-memory Blockfrost: address UTxO sets, which txs are in a block, and a submit endpoint that answers
+ * with the real tx id. Txs this wallet submits exist on it only once the test "lands" them.
+ */
+const fakeChain = () => {
+    const utxosByAddress = new Map<string, ReturnType<typeof utxo>[]>();
+    const inBlock = new Set<string>();
+    const calls: string[] = [];
+    const route: Route = (url, init) => {
+        if (url.endsWith('/tx/submit')) return { status: 200, body: `"${txHashFromCbor(Buffer.from(init!.body as Uint8Array).toString('hex'))}"` };
+        const addr = url.match(/\/addresses\/([^/]+)\/utxos\?/)?.[1];
+        if (addr) return utxosByAddress.get(addr)?.length ? { status: 200, body: utxosByAddress.get(addr) } : undefined;
+        const tx = url.match(/\/txs\/([0-9a-f]{64})$/)?.[1];
+        if (tx && inBlock.has(tx)) return { status: 200, body: { hash: tx, block: 'b'.repeat(64), valid_contract: true } };
+        return undefined;
+    };
+    const set = (address: string, ...entries: ReturnType<typeof utxo>[]) => utxosByAddress.set(address, entries);
+    return { set, inBlock, calls, fetchFn: fakeFetch(route, calls) };
+};
+
+const OTHER = CIP19_ENTERPRISE_ADDRESS;
+const payTx = (inputs: string[], outputs: [string, number][]) =>
+    Serialization.Transaction.fromCore({
+        id: '0'.repeat(64),
+        body: {
+            inputs: inputs.map((ref) => ({ txId: ref.split('#')[0], index: Number(ref.split('#')[1]) })),
+            outputs: outputs.map(([address, coins]) => ({ address: Cardano.PaymentAddress(address), value: { coins: BigInt(coins) } })),
+            fee: BigInt(170_000)
+        },
+        witness: { signatures: new Map() },
+        isValid: true
+    } as unknown as Cardano.Tx).toCbor() as string;
+
+const refsOf = (cbors: string[]) =>
+    cbors
+        .map((c) => Serialization.TransactionUnspentOutput.fromCbor(c as never).toCore())
+        .map(([input, output]) => `${input.txId}#${input.index}=${output.value.coins}`)
+        .sort();
+
+const witnessKeyHashes = (witnessSetCbor: string) =>
+    [...(Serialization.TransactionWitnessSet.fromCbor(witnessSetCbor as never).toCore().signatures ?? new Map()).keys()]
+        .map((k) => Crypto.Ed25519PublicKey.fromHex(k).hash().hex())
+        .sort();
+
+describe('createLiveWallet chains like a real wallet', () => {
+    const A = 'a1'.repeat(32);
+    const B = 'b2'.repeat(32);
+    afterEach(() => resetRateLimits());
+
+    it('hands out its own unconfirmed change and hides the inputs it spent, until the tx is in a block', async () => {
+        const chain = fakeChain();
+        const wallet = await createLiveWallet({ mnemonic: MNEMONIC, network: 'preview', blockfrostApiKey: 'k', fetchFn: chain.fetchFn });
+        chain.set(wallet.address, utxo(A, 0, 10_000_000), utxo(B, 0, 3_000_000));
+
+        const t1Cbor = payTx([`${A}#0`], [[OTHER, 2_000_000], [wallet.address, 7_830_000]]);
+        const t1 = (await wallet.call('submitTx', t1Cbor)) as string;
+        expect(t1).toBe(txHashFromCbor(t1Cbor));
+        // Blockfrost still reports A unspent and knows nothing of t1 — the wallet does.
+        expect(refsOf((await wallet.call('getUtxos')) as string[])).toEqual([`${B}#0=3000000`, `${t1}#1=7830000`].sort());
+        expect(Serialization.Value.fromCbor((await wallet.call('getBalance')) as never).toCore().coins).toBe(BigInt(10_830_000));
+
+        // A second tx built from t1's unconfirmed change is a chained submission.
+        const t2 = (await wallet.call('submitTx', payTx([`${t1}#1`], [[OTHER, 2_000_000], [wallet.address, 5_660_000]]))) as string;
+        expect(wallet.submissions.map((s) => [s.txHash, s.chainedInputs])).toEqual([
+            [t1, []],
+            [t2, [`${t1}#1`]]
+        ]);
+        expect(refsOf((await wallet.call('getUtxos')) as string[])).toEqual([`${B}#0=3000000`, `${t2}#1=5660000`].sort());
+        expect(wallet.pendingTxHashes()).toEqual([t1, t2]);
+
+        // t1 lands: its change is on chain but still spent by pending t2.
+        chain.inBlock.add(t1);
+        chain.set(wallet.address, utxo(B, 0, 3_000_000), utxo(t1, 1, 7_830_000));
+        expect(refsOf((await wallet.call('getUtxos')) as string[])).toEqual([`${B}#0=3000000`, `${t2}#1=5660000`].sort());
+        expect(wallet.pendingTxHashes()).toEqual([t2]);
+
+        // t2 lands: chain truth takes over — an output later gone from chain is not resurrected.
+        chain.inBlock.add(t2);
+        chain.set(wallet.address, utxo(B, 0, 3_000_000));
+        expect(refsOf((await wallet.call('getUtxos')) as string[])).toEqual([`${B}#0=3000000`]);
+        expect(wallet.pendingTxHashes()).toEqual([]);
+        expect(await wallet.countUtxos()).toBe(1);
+        // The wallet never asked a provider about its own chained inputs.
+        expect(chain.calls.filter((c) => /\/txs\/[0-9a-f]+\/utxos/.test(c))).toEqual([]);
+    });
+
+    it('only its own outputs join the view, and a rejected submission changes nothing', async () => {
+        const chain = fakeChain();
+        const wallet = await createLiveWallet({ mnemonic: MNEMONIC, network: 'preview', blockfrostApiKey: 'k', fetchFn: chain.fetchFn });
+        chain.set(wallet.address, utxo(A, 0, 10_000_000));
+        const t1 = (await wallet.call('submitTx', payTx([`${A}#0`], [[OTHER, 9_830_000]]))) as string;
+        expect(await wallet.call('getUtxos')).toEqual([]);
+        expect(wallet.pendingTxHashes()).toEqual([t1]);
+
+        const rejecting = await createLiveWallet({
+            mnemonic: MNEMONIC,
+            network: 'preview',
+            blockfrostApiKey: 'k',
+            fetchFn: fakeFetch((url) =>
+                url.endsWith('/tx/submit')
+                    ? { status: 400, body: { status_code: 400, error: 'Bad Request', message: 'BadInputsUTxO' } }
+                    : url.includes(`${wallet.address}/utxos`)
+                      ? { status: 200, body: [utxo(A, 0, 10_000_000)] }
+                      : undefined
+            )
+        });
+        await expect(rejecting.call('submitTx', payTx([`${A}#0`], [[OTHER, 9_830_000]]))).rejects.toThrow('Submit failed: 400 BadInputsUTxO');
+        expect(refsOf((await rejecting.call('getUtxos')) as string[])).toEqual([`${A}#0=10000000`]);
+        expect(rejecting.submissions).toEqual([]);
+    });
+
+    it('signs a chained input at its stake-key address with the stake key, resolved from its own view', async () => {
+        const chain = fakeChain();
+        const wallet = await createLiveWallet({ mnemonic: MNEMONIC, network: 'preview', blockfrostApiKey: 'k', fetchFn: chain.fetchFn });
+        const stakeKeyAddress = Cardano.EnterpriseAddress.fromCredentials(0, { type: Cardano.CredentialType.KeyHash, hash: wallet.stakeKeyHash as never })
+            .toAddress()
+            .toBech32();
+        chain.set(wallet.address, utxo(A, 0, 10_000_000));
+        const t1 = (await wallet.call('submitTx', payTx([`${A}#0`], [[stakeKeyAddress, 5_000_000], [wallet.address, 4_830_000]]))) as string;
+        expect(refsOf((await wallet.call('getUtxos')) as string[])).toEqual([`${t1}#0=5000000`, `${t1}#1=4830000`].sort());
+
+        const spendsStakeOutput = (await wallet.call('signTx', payTx([`${t1}#0`], [[OTHER, 4_800_000]]))) as string;
+        expect(witnessKeyHashes(spendsStakeOutput)).toEqual([wallet.paymentKeyHash, wallet.stakeKeyHash].sort());
+        const spendsBaseOutput = (await wallet.call('signTx', payTx([`${t1}#1`], [[OTHER, 4_800_000]]))) as string;
+        expect(witnessKeyHashes(spendsBaseOutput)).toEqual([wallet.paymentKeyHash]);
+        expect(chain.calls.filter((c) => /\/txs\/[0-9a-f]+\/utxos/.test(c))).toEqual([]);
+    });
+
+    it('waits out a stated rate limit before calling Blockfrost again, and stops when none is stated', async () => {
+        const probe = await createLiveWallet({ mnemonic: MNEMONIC, network: 'preview', blockfrostApiKey: 'k', fetchFn: fakeFetch(() => undefined) });
+        const at: number[] = [];
+        const limited = await createLiveWallet({
+            mnemonic: MNEMONIC,
+            network: 'preview',
+            blockfrostApiKey: 'k',
+            fetchFn: fakeFetch((url) => {
+                if (!url.includes(`${probe.address}/utxos`)) return undefined;
+                at.push(Date.now());
+                return at.length === 1
+                    ? { status: 429, body: { status_code: 429, error: 'Project Over Limit', message: 'slow down' }, headers: { 'Retry-After': '1' } }
+                    : { status: 200, body: [utxo(A, 0, 10_000_000)] };
+            })
+        });
+        expect(refsOf((await limited.call('getUtxos')) as string[])).toEqual([`${A}#0=10000000`]);
+        expect(at).toHaveLength(2);
+        expect(at[1] - at[0]).toBeGreaterThanOrEqual(1000);
+
+        resetRateLimits();
+        let attempts = 0;
+        const unstated = await createLiveWallet({
+            mnemonic: MNEMONIC,
+            network: 'preview',
+            blockfrostApiKey: 'k',
+            fetchFn: fakeFetch((url) => (url.includes('/utxos') ? (attempts++, { status: 429, body: { status_code: 429, error: 'Project Over Limit', message: 'slow down' } }) : undefined))
+        });
+        await expect(unstated.call('getUtxos')).rejects.toThrow('429');
+        expect(attempts).toBe(1);
     });
 });
 
