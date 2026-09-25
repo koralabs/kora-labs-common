@@ -124,6 +124,7 @@ export class BlockfrostTxClient {
             priceSteps: ratio(p.price_step),
             minFeeRefScriptCostPerByte: ratio(p.min_fee_ref_script_cost_per_byte ?? 0),
             coinsPerUtxoByte: BigInt(p.coins_per_utxo_size),
+            stakeKeyDeposit: BigInt(p.key_deposit),
             maxTxSize: Number(p.max_tx_size),
             maxTxExUnits: { memory: Number(p.max_tx_ex_mem), steps: Number(p.max_tx_ex_steps) },
             costModels
