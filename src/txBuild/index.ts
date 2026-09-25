@@ -3,3 +3,4 @@
 export * from './fees';
 export * from './scriptTx';
 export * from './blockfrost';
+export * from './scalus';

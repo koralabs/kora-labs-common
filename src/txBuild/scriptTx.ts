@@ -22,6 +22,8 @@ export type PlutusData = Serialization.PlutusData;
 
 export interface ScriptTxProtocolParameters extends FeeParameters {
     coinsPerUtxoByte: bigint;
+    /** key_deposit: what a (pre-Conway-style) stake registration certificate locks. */
+    stakeKeyDeposit: bigint;
     maxTxSize: number;
     maxTxExUnits: { memory: number; steps: number };
     /** Ledger-ordered cost models (Blockfrost `cost_models_raw`), keyed by Plutus language. */
@@ -38,6 +40,8 @@ export interface ScriptTxPlan {
     /** One entry per policy. A redeemer marks a Plutus policy (native policies need `nativeScripts`). */
     mint?: { policyId: string; assets: Map<string, bigint>; redeemer?: PlutusData }[];
     withdrawals?: { rewardAccount: string; quantity: bigint; redeemer?: PlutusData }[];
+    /** Stake (de)registrations; their deposits/refunds are balanced into the change. No certificate redeemers. */
+    certificates?: Cardano.Certificate[];
     requiredSigners?: string[];
     nativeScripts?: Cardano.NativeScript[];
     validityInterval?: Cardano.ValidityInterval;
@@ -114,6 +118,22 @@ const placeholderSignatures = (count: number) => {
     return signatures;
 };
 
+/** Lovelace a certificate locks (positive) or releases (negative). */
+export const certificateDeposit = (certificate: Cardano.Certificate, stakeKeyDeposit: bigint): bigint => {
+    switch (certificate.__typename) {
+        case Cardano.CertificateType.StakeRegistration:
+            return stakeKeyDeposit;
+        case Cardano.CertificateType.StakeDeregistration:
+            return -stakeKeyDeposit;
+        case Cardano.CertificateType.Registration:
+            return certificate.deposit;
+        case Cardano.CertificateType.Unregistration:
+            return -certificate.deposit;
+        default:
+            throw new Error(`Certificate ${certificate.__typename} is not supported by finalizeScriptTx`);
+    }
+};
+
 const sumValues = (values: Cardano.Value[]) => {
     let coins = BigInt(0);
     const assets = new Map<Cardano.AssetId, bigint>();
@@ -143,10 +163,11 @@ export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProto
     }
     const inValue = sumValues(inputs.map(({ utxo }) => utxo[1].value));
     const withdrawn = withdrawals.reduce((sum, w) => sum + w.quantity, BigInt(0));
+    const deposited = (plan.certificates ?? []).reduce((sum, c) => sum + certificateDeposit(c, params.stakeKeyDeposit), BigInt(0));
     const produced = sumValues(outputs.map((o) => o.value));
 
     const changeFor = (fee: bigint): Cardano.TxOut => {
-        const coins = inValue.coins + withdrawn - produced.coins - fee;
+        const coins = inValue.coins + withdrawn - deposited - produced.coins - fee;
         if (coins < BigInt(0)) throw new Error(`Inputs do not cover outputs + fee: ${-coins} lovelace short`);
         const assets = new Map<Cardano.AssetId, bigint>();
         const ids = new Set([...inValue.assets.keys(), ...tokenMap.keys(), ...produced.assets.keys()]);
@@ -174,6 +195,7 @@ export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProto
             ...(plan.referenceInputs?.length ? { referenceInputs: [...plan.referenceInputs].sort(byTxIn) } : {}),
             ...(plan.collateral?.length ? { collaterals: [...plan.collateral].sort(byTxIn) } : {}),
             ...(tokenMap.size ? { mint: tokenMap } : {}),
+            ...(plan.certificates?.length ? { certificates: plan.certificates } : {}),
             ...(withdrawals.length ? { withdrawals: withdrawals.map((w) => ({ stakeAddress: w.rewardAccount as Cardano.RewardAccount, quantity: w.quantity })) } : {}),
             ...(plan.requiredSigners?.length ? { requiredExtraSignatures: [...new Set(plan.requiredSigners)].sort(hexCompare) as NonNullable<Cardano.TxBody['requiredExtraSignatures']> } : {}),
             ...(plan.validityInterval ? { validityInterval: plan.validityInterval } : {}),
@@ -229,6 +251,32 @@ export const finalizeScriptTx = async (plan: ScriptTxPlan, params: ScriptTxProto
     const signedSize = sizeOf(fee, exUnits);
     if (signedSize > params.maxTxSize) throw new Error(`Transaction is ${signedSize} bytes, above the ${params.maxTxSize} byte limit`);
     return { cbor: tx.toCbor(), txId: tx.getId(), fee, outputs: [...outputs, change], redeemers };
+};
+
+/**
+ * Wallet inputs for a tx whose other inputs are fixed: ADA-only UTxOs first, largest first, until they
+ * hold `lovelace` (callers include a fee/min-UTxO allowance; the finalizer returns the excess as change).
+ * UTxOs carrying tokens are only used when ADA-only ones do not suffice (their tokens go to change).
+ */
+export const selectWalletInputs = (utxos: Cardano.Utxo[], lovelace: bigint, exclude: Set<string> = new Set()): Cardano.Utxo[] => {
+    const key = ([txIn]: Cardano.Utxo) => `${txIn.txId}#${txIn.index}`;
+    const candidates = utxos
+        .filter((u) => !exclude.has(key(u)))
+        .sort((a, b) => {
+            const tokensA = a[1].value.assets?.size ? 1 : 0;
+            const tokensB = b[1].value.assets?.size ? 1 : 0;
+            if (tokensA !== tokensB) return tokensA - tokensB;
+            return a[1].value.coins === b[1].value.coins ? 0 : a[1].value.coins > b[1].value.coins ? -1 : 1;
+        });
+    const selected: Cardano.Utxo[] = [];
+    let total = BigInt(0);
+    for (const utxo of candidates) {
+        if (total >= lovelace) break;
+        selected.push(utxo);
+        total += utxo[1].value.coins;
+    }
+    if (total < lovelace) throw new Error(`Wallet holds ${total} spendable lovelace; ${lovelace} needed`);
+    return selected;
 };
 
 /**

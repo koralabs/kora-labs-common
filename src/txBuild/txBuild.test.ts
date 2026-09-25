@@ -5,7 +5,8 @@ import { resetRateLimits } from '../chain/transport/rateLimit';
 const fixture = require('./fixtures/previewHalMintTx.json');
 import { BlockfrostEvaluationError, BlockfrostTxClient, toOgmiosUtxo } from './blockfrost';
 import { minFee, ratio, referenceScriptFee, scriptExecutionFee } from './fees';
-import { addVkeyWitnesses, computeScriptDataHash, Evaluator, finalizeScriptTx, ScriptTxProtocolParameters, withMinAda } from './scriptTx';
+import { applyParamsToScript, localEvaluator, plutusScriptHash, toDoubleCbor, toSingleCbor } from './scalus';
+import { addVkeyWitnesses, certificateDeposit, selectWalletInputs, computeScriptDataHash, Evaluator, finalizeScriptTx, ScriptTxProtocolParameters, withMinAda } from './scriptTx';
 
 setInConwayEra(true);
 
@@ -17,6 +18,7 @@ const params: ScriptTxProtocolParameters = {
     priceSteps: ratio(fixture.params.price_step),
     minFeeRefScriptCostPerByte: ratio(fixture.params.min_fee_ref_script_cost_per_byte),
     coinsPerUtxoByte: BigInt(fixture.params.coins_per_utxo_size),
+    stakeKeyDeposit: BigInt(fixture.params.key_deposit),
     maxTxSize: fixture.params.max_tx_size,
     maxTxExUnits: { memory: Number(fixture.params.max_tx_ex_mem), steps: Number(fixture.params.max_tx_ex_steps) },
     costModels: new Map([[Cardano.PlutusLanguageVersion.V2, fixture.params.cost_models_raw.PlutusV2]])
@@ -171,6 +173,61 @@ describe('finalizeScriptTx', () => {
     });
 });
 
+describe('finalizeScriptTx with certificates', () => {
+    // Invariant: a stake registration locks key_deposit, so the change is inputs − deposit − fee.
+    // Failure caught: an unbalanced tx (ValueNotConservedUTxO) when registering a script's staking credential.
+    // Negative control: leaving the deposit out of the balance makes Σoutputs + fee + deposit ≠ Σinputs.
+    it('balances a stake registration deposit and never evaluates a script-free tx', async () => {
+        let evaluations = 0;
+        const registration: Cardano.Certificate = {
+            __typename: Cardano.CertificateType.StakeRegistration,
+            stakeCredential: { type: Cardano.CredentialType.ScriptHash, hash: '608634513520c1ede320bdc04e0eb8877565d21de0e52273632e8fa3' as Cardano.Credential['hash'] }
+        };
+        const built = await finalizeScriptTx(
+            {
+                inputs: [{ utxo: utxo('1'.repeat(64), 0, BigInt(10_000_000), CHANGE_ADDR) }],
+                outputs: [],
+                certificates: [registration],
+                changeAddress: CHANGE_ADDR,
+                signerCount: 1,
+                plutusLanguages: [],
+                referenceScriptBytes: 0
+            },
+            params,
+            async () => {
+                evaluations++;
+                return new Map();
+            }
+        );
+        const body = Serialization.Transaction.fromCbor(built.cbor as Serialization.TxCBOR).body().toCore();
+        expect(body.certificates).toEqual([registration]);
+        expect(evaluations).toBe(0);
+        expect(body.scriptIntegrityHash).toBeUndefined();
+        expect(built.outputs[0].value.coins + built.fee + params.stakeKeyDeposit).toBe(BigInt(10_000_000));
+    });
+
+    it('refuses certificates it cannot balance', () => {
+        expect(() => certificateDeposit({ __typename: Cardano.CertificateType.StakeDelegation } as Cardano.Certificate, BigInt(2))).toThrow(/not supported/);
+        expect(certificateDeposit({ __typename: Cardano.CertificateType.StakeDeregistration } as Cardano.Certificate, BigInt(2))).toBe(BigInt(-2));
+    });
+});
+
+describe('selectWalletInputs', () => {
+    const withToken = (txId: string, coins: bigint): Cardano.Utxo => {
+        const [txIn, txOut] = utxo(txId, 0, coins, CHANGE_ADDR);
+        return [txIn, { ...txOut, value: { coins, assets: new Map([[Cardano.AssetId(`${POLICY_A}01`), BigInt(1)]]) } }];
+    };
+    it('prefers ADA-only UTxOs, largest first, and stops once covered', () => {
+        const picked = selectWalletInputs([utxo('1'.repeat(64), 0, BigInt(3), CHANGE_ADDR), withToken('2'.repeat(64), BigInt(100)), utxo('3'.repeat(64), 0, BigInt(9), CHANGE_ADDR), utxo('4'.repeat(64), 0, BigInt(5), CHANGE_ADDR)], BigInt(12));
+        expect(picked.map(([i]) => i.txId[0])).toEqual(['3', '4']);
+    });
+    it('uses token UTxOs only when needed, skips excluded ones, and fails when the wallet is short', () => {
+        const all = [utxo('1'.repeat(64), 0, BigInt(3), CHANGE_ADDR), withToken('2'.repeat(64), BigInt(100))];
+        expect(selectWalletInputs(all, BigInt(50)).map(([i]) => i.txId[0])).toEqual(['1', '2']);
+        expect(() => selectWalletInputs(all, BigInt(50), new Set([`${'2'.repeat(64)}#0`]))).toThrow(/3 spendable lovelace; 50 needed/);
+    });
+});
+
 describe('addVkeyWitnesses', () => {
     it('adds signatures without touching the body or the redeemer bytes', () => {
         const signed = addVkeyWitnesses(fixture.cbor, [{ vkey: '7'.repeat(64), signature: 'cd'.repeat(64) }]);
@@ -233,5 +290,52 @@ describe('BlockfrostTxClient', () => {
         const p = await client.getProtocolParameters();
         expect(p.costModels.get(Cardano.PlutusLanguageVersion.V2)).toEqual(fixture.params.cost_models_raw.PlutusV2);
         expect(p.priceSteps).toEqual({ n: BigInt(721), d: BigInt(10000000) });
+    });
+});
+
+describe('scalus (local UPLC)', () => {
+    const utxos = (fixture.utxos as { input: string; output: string }[]).map(
+        ({ input, output }) => [Serialization.TransactionInput.fromCbor(input as never).toCore(), Serialization.TransactionOutput.fromCbor(output as never).toCore()] as Cardano.Utxo
+    );
+
+    // Invariant: parameters applied off-Helios give the validator the chain knows.
+    // Negative control: the neighbouring parameter value gives a different hash.
+    it('applies a parameter to a compiled Aiken validator and reproduces the deployed script hash', () => {
+        const mintVersion = (n: number) => [Serialization.PlutusData.newInteger(BigInt(n))];
+        expect(plutusScriptHash(applyParamsToScript(fixture.halMintProxyCompiledCode, mintVersion(4)), Cardano.PlutusLanguageVersion.V2)).toBe('171e700eae9a90a34ecbd5c8bbf8caf7e6c71f0d5799d8875cbb93a2');
+        expect(plutusScriptHash(applyParamsToScript(fixture.halMintProxyCompiledCode, mintVersion(3)), Cardano.PlutusLanguageVersion.V2)).not.toBe('171e700eae9a90a34ecbd5c8bbf8caf7e6c71f0d5799d8875cbb93a2');
+    });
+
+    it('converts between the single- and double-CBOR script forms', () => {
+        const single = fixture.halMintProxyCompiledCode as string;
+        expect(toSingleCbor(toDoubleCbor(single))).toBe(single);
+        expect(toDoubleCbor(toDoubleCbor(single))).toBe(toDoubleCbor(single));
+    });
+
+    // Invariant: offline evaluation accepts what the node accepts, so tests/tooling can prove validators
+    // accept a tx without a network. Its costs are close to, not equal to, the node's (scalus 0.15 prices
+    // some scripts ~0.5% higher on protocol 11) — which is why production evaluates with the node.
+    it('evaluates every redeemer of a live Plutus tx, within 1% of the node', async () => {
+        const evaluate = localEvaluator({ utxos, costModels: params.costModels, network: 'preview' });
+        const units = await evaluate(fixture.cbor);
+        expect([...units.keys()].sort()).toEqual(Object.keys(fixture.nodeExUnits).sort());
+        for (const [key, node] of Object.entries(fixture.nodeExUnits as Record<string, { memory: number; steps: number }>)) {
+            const local = units.get(key)!;
+            expect(Math.abs(Number(local.steps) - node.steps) / node.steps).toBeLessThan(0.01);
+            expect(Math.abs(Number(local.memory) - node.memory) / node.memory).toBeLessThan(0.01);
+        }
+    });
+
+    it('fails a tx whose redeemer the validator rejects', async () => {
+        const evaluate = localEvaluator({ utxos, costModels: params.costModels, network: 'preview' });
+        // Replace the minting-data Mint redeemer (spend:1) with Constr 1 [] (UpdateMPT: needs the admin, not given).
+        const tx = Serialization.Transaction.fromCbor(fixture.cbor as Serialization.TxCBOR);
+        const witnessSet = tx.witnessSet();
+        const redeemers = witnessSet.redeemers()!.toCore().map((r) =>
+            r.purpose === Cardano.RedeemerPurpose.spend && r.index === 1 ? { ...r, data: Serialization.PlutusData.fromCbor('d87a80' as never).toCore() } : r
+        );
+        witnessSet.setRedeemers(Serialization.Redeemers.fromCore(redeemers));
+        tx.setWitnessSet(witnessSet);
+        await expect(evaluate(tx.toCbor())).rejects.toBeDefined();
     });
 });
