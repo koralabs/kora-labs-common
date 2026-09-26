@@ -81,12 +81,16 @@ export const rateLimitWaitRemainingMs = (key: string, now = Date.now()) => Math.
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Wait out a recorded limit before calling `key`; throw (returning the wait) when it exceeds `maxWaitMs`. */
+/**
+ * Wait out a recorded limit before calling `key`; throw (returning the wait) when it exceeds `maxWaitMs`.
+ * A timer runs on the monotonic clock while the block is wall-clock ms (Date.now()), so it can fire a
+ * millisecond or more before Date.now() reaches the stated time: re-check and keep waiting until it has.
+ */
 export const waitForRateLimit = async (key: string, maxWaitMs: number): Promise<void> => {
-    const remaining = rateLimitWaitRemainingMs(key);
-    if (remaining === 0) return;
-    if (remaining > maxWaitMs) throw new RateLimitedError(key, remaining);
-    await sleep(remaining);
+    for (let remaining = rateLimitWaitRemainingMs(key); remaining > 0; remaining = rateLimitWaitRemainingMs(key)) {
+        if (remaining > maxWaitMs) throw new RateLimitedError(key, remaining);
+        await sleep(remaining);
+    }
 };
 
 /** Test seam: forget every recorded limit. */
