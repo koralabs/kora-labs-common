@@ -61,6 +61,29 @@ describe('imageDatum', () => {
         expect(result).toEqual({ image: '' });
     });
 
+    it('getImageDataFromDatum ignores a non-object CIP-68 extra field (mainnet "@THERAF" background)', async () => {
+        // Mainnet 2026-09-27..30: a background whose datum extra is a bytestring ("@THERAF" as 0x hex)
+        // made normalizeCreatorDefaultTextFields run `'font' in <string>` and throw a TypeError.
+        const fetcher = async () => ({
+            text: async () =>
+                JSON.stringify({
+                    constructor_0: { '0': { image: 'ipfs://bg' }, '1': 1, '2': '0x40544845524146' }
+                })
+        });
+        const result = await getImageDataFromDatum('https://api', 'cbor', { fetcher: fetcher as any });
+        expect(result).toEqual({ image: 'ipfs://bg' });
+    });
+
+    it('getImageDataFromDatum ignores an array or numeric extra field', async () => {
+        for (const extra of [[1, 2], 7]) {
+            const fetcher = async () => ({
+                text: async () => JSON.stringify({ constructor_0: { '0': { image: 'i' }, '2': extra } })
+            });
+            const result = await getImageDataFromDatum('https://api', 'cbor', { fetcher: fetcher as any });
+            expect(result).toEqual({ image: 'i' });
+        }
+    });
+
     it('getImageDataFromDatum tolerates an empty decoder response', async () => {
         const fetcher = async () => ({ text: async () => '' });
         const result = await getImageDataFromDatum('https://api', 'x', { fetcher: fetcher as any });
