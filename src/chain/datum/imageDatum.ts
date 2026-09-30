@@ -108,7 +108,9 @@ export const getImageDataFromDatum = async (
     let data: ImageDatumDetails = { image };
 
     const creatorDefaults = decodedDatum?.constructor_0?.[2]?.constructor_0?.[0] ?? decodedDatum.constructor_0?.[2];
-    if (creatorDefaults) {
+    // CIP-68 `extra` is arbitrary PlutusData; only a map is creator defaults (a bytestring like
+    // "@THERAF" is not, and used to throw in normalizeCreatorDefaultTextFields).
+    if (creatorDefaults && typeof creatorDefaults === 'object' && !Array.isArray(creatorDefaults)) {
         normalizeCreatorDefaultTextFields(creatorDefaults);
         data = { image, creatorDefaults, metadata: decodedDatum?.constructor_0?.[0] };
     }
