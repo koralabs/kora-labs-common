@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { errors, types } from 'cassandra-driver';
 
 import {
+    acquireOnExecutor,
     acquireWithExecutor,
     CqlExecutor,
     CronLockTopology,
@@ -293,5 +294,51 @@ describe('CQL cron-lock release', () => {
         table.rows.set('preview:lock', 'sfo:me');
         assert.deepEqual(await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'sfo', topology), { status: 'released' });
         assert.equal(table.deletes(), 0);
+    });
+});
+
+describe('CQL cron-lock schema check', () => {
+    // Invariant: with the peer DC down, a fresh process still reaches the SERIAL insert and reports
+    // 'peerUnavailable' (the one-box solo path), because an existing schema needs no DDL.
+    // Failure caught: incident 2026-10-07 — DDL on every fresh process hung without the peer (schema
+    // changes need a cluster majority), timed out, and masked the definite UNAVAILABLE as 'unavailable'.
+    // Negative control: issuing CREATE unconditionally again makes this return 'unavailable'.
+    it('skips DDL when the table exists so a down peer yields peerUnavailable', async () => {
+        const queries: string[] = [];
+        const executor: CqlExecutor = {
+            async execute(query) {
+                queries.push(query);
+                if (query.startsWith('SELECT') && query.includes('system_schema.tables')) return { rows: [{ table_name: 'cron_lock' }] };
+                if (query.startsWith('CREATE')) throw new errors.OperationTimedOutError('The host did not reply before timeout 12000 ms');
+                if (query.startsWith('INSERT')) throw responseError(types.responseErrorCodes.unavailableException);
+                throw new Error(`unexpected query ${query}`);
+            }
+        };
+
+        const result = await acquireOnExecutor(executor, 'lock.updateActiveSessionsLock', 'none', topology);
+
+        assert.equal(result.status, 'peerUnavailable');
+        assert.equal(queries.some((query) => query.startsWith('CREATE')), false);
+    });
+
+    // Invariant: a cluster without the lock table still gets it created before the first lock.
+    // Failure caught: the existence check skipping DDL on a fresh cluster, so every INSERT fails.
+    // Negative control: removing the CREATE branch leaves no CREATE TABLE before the INSERT.
+    it('creates the keyspace and table when they are missing', async () => {
+        const queries: string[] = [];
+        const executor: CqlExecutor = {
+            async execute(query) {
+                queries.push(query);
+                if (query.startsWith('SELECT')) return { rows: [] };
+                if (query.startsWith('INSERT')) return { rows: [{ '[applied]': true }] };
+                return { rows: [] };
+            }
+        };
+
+        const result = await acquireOnExecutor(executor, 'lock.fresh', 'none', topology);
+
+        assert.equal(result.status, 'acquired');
+        const createTable = queries.findIndex((query) => query.startsWith('CREATE TABLE IF NOT EXISTS kora_locks.cron_lock'));
+        assert.ok(createTable >= 0 && createTable < queries.findIndex((query) => query.startsWith('INSERT')));
     });
 });

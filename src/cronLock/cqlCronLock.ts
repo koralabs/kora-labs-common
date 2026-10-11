@@ -11,9 +11,9 @@
  *  - all boxes online: SERIAL / QUORUM;
  *  - this box offline: stand down;
  *  - this box is the only declared-online box: LOCAL_SERIAL / LOCAL_QUORUM;
- *  - an undeclared peer outage: the caller normally fails closed. StateData may
- *    use its DC-local fallback only for mintPaidSessions and only after a definite
- *    CQL UNAVAILABLE response (never after a timeout or unknown failure).
+ *  - an undeclared peer outage: 'peerUnavailable'. Callers whose job is safe on one
+ *    box (on-chain/idempotent) may take a DC-local fallback, and only after this
+ *    definite CQL UNAVAILABLE response (never after a timeout or unknown failure).
  *
  * The row TTL recovers crashed holders. Unique per-invocation owner tokens prevent
  * overlapping ticks on one box from mistaking node identity for lock ownership.
@@ -90,7 +90,7 @@ const scopeName = (name: string, topology: CronLockTopology): string => `${topol
 
 let client: Client | null = null;
 let clientTopologyKey = '';
-let ensured = false;
+const ensured = new WeakSet<CqlExecutor>();
 
 const getClient = (topology: CronLockTopology): Client => {
     const topologyKey = JSON.stringify([topology.contactPoints, topology.localDataCenter]);
@@ -101,21 +101,33 @@ const getClient = (topology: CronLockTopology): Client => {
             socketOptions: { connectTimeout: 8000, readTimeout: 12000 }
         });
         clientTopologyKey = topologyKey;
-        ensured = false;
     }
     return client;
 };
 
+/**
+ * Schema changes need a majority of the whole cluster, so with a peer DC down a CREATE … IF NOT EXISTS
+ * hangs until the driver times out — masking the definite UNAVAILABLE the one-box solo path relies on
+ * (incident 2026-10-07). system_schema is replicated to every node (LocalStrategy), so reading it
+ * needs no peer; DDL is issued only on a cluster that really lacks the table.
+ */
 const ensureSchema = async (executor: CqlExecutor): Promise<void> => {
-    if (ensured) return;
-    await executor.execute(
-        `CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH replication = ` +
-            `{'class':'NetworkTopologyStrategy','kora-dc1':1,'kora-dc2':1}`
+    if (ensured.has(executor)) return;
+    const existing = await executor.execute(
+        'SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? AND table_name = ?',
+        [KEYSPACE, LOCK_TABLE],
+        { prepare: true, consistency: types.consistencies.localOne }
     );
-    await executor.execute(
-        `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${LOCK_TABLE} (name text PRIMARY KEY, owner text, acquired_at timestamp)`
-    );
-    ensured = true;
+    if (existing.rows.length === 0) {
+        await executor.execute(
+            `CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH replication = ` +
+                `{'class':'NetworkTopologyStrategy','kora-dc1':1,'kora-dc2':1}`
+        );
+        await executor.execute(
+            `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${LOCK_TABLE} (name text PRIMARY KEY, owner text, acquired_at timestamp)`
+        );
+    }
+    ensured.add(executor);
 };
 
 export const parseOffline = (raw: string | undefined | null): string[] => {
@@ -232,12 +244,22 @@ const deleteIfOwner = async (executor: CqlExecutor, key: string, token: string, 
     }
 };
 
+/** One fresh process's acquisition: make sure the lock table exists, then take the lock. */
+export const acquireOnExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology,
+    lease?: number
+): Promise<AcquireResult> => {
+    await ensureSchema(executor);
+    return acquireWithExecutor(executor, name, offline, topology, undefined, lease);
+};
+
 export const acquire = async (name: string, offline?: string | null, options: { leaseMs?: number } = {}): Promise<AcquireResult> => {
     try {
         const topology = resolveTopology();
-        const executor = getClient(topology);
-        await ensureSchema(executor);
-        const result = await acquireWithExecutor(executor, name, offline, topology, undefined, options.leaseMs);
+        const result = await acquireOnExecutor(getClient(topology), name, offline, topology, options.leaseMs);
         if (result.status === 'peerUnavailable') {
             Logger.log({
                 message: `cron lock '${name}' SERIAL unavailable because the configured peer quorum is unavailable: ${result.message}`,
