@@ -150,9 +150,18 @@ export const resolveMode = (offline: string[], topology: CronLockTopology): Mode
 
 const createToken = (topology: CronLockTopology): string => `${topology.nodeCode}:${randomUUID()}`;
 
-/** Only an UNAVAILABLE response proves that no SERIAL proposal was accepted. */
-export const isPeerUnavailableError = (error: unknown): boolean =>
-    error instanceof errors.ResponseError && error.code === types.responseErrorCodes.unavailableException;
+/**
+ * Only an UNAVAILABLE response proves that no SERIAL proposal was accepted. The driver's default retry
+ * policy retries UNAVAILABLE on the next host and then throws NoHostAvailableError wrapping each host's
+ * error, so that counts only when every host tried answered UNAVAILABLE.
+ */
+export const isPeerUnavailableError = (error: unknown): boolean => {
+    if (error instanceof errors.NoHostAvailableError) {
+        const inner = Object.values(error.innerErrors ?? {});
+        return inner.length > 0 && inner.every(isPeerUnavailableError);
+    }
+    return error instanceof errors.ResponseError && error.code === types.responseErrorCodes.unavailableException;
+};
 
 /** A write timeout leaves an LWT's outcome unknown: the proposal may or may not have been applied. */
 export const isWriteTimeoutError = (error: unknown): boolean =>

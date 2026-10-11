@@ -92,6 +92,22 @@ describe('CQL cron-lock acquisition', () => {
         assert.equal((await acquireWithExecutor(failing(unavailable), 'lock', 'rdm', topology)).status, 'unavailable');
     });
 
+    // Invariant: the driver's real shape of a down peer still reaches the solo path. cassandra-driver's
+    // default retry policy retries UNAVAILABLE on the next host and then throws NoHostAvailableError
+    // wrapping each host's ResponseError (seen live on a two-DC Scylla 6.2 with one DC stopped).
+    // Failure caught: only a bare ResponseError matched, so a real outage was 'unavailable' and no box ran.
+    // Negative control: a wrapped timeout or a mix of UNAVAILABLE and a timeout stays 'unavailable'.
+    it('classifies a NoHostAvailableError of only UNAVAILABLE responses as peer unavailable', async () => {
+        const failing = (error: Error): CqlExecutor => ({ execute: async () => Promise.reject(error) });
+        const unavailable = responseError(types.responseErrorCodes.unavailableException);
+        const timeout = new errors.OperationTimedOutError('no reply');
+        const noHost = (inner: Record<string, Error>) => new errors.NoHostAvailableError(inner);
+
+        assert.equal((await acquireWithExecutor(failing(noHost({ 'a:9042': unavailable, 'b:9042': unavailable })), 'lock', 'none', topology)).status, 'peerUnavailable');
+        assert.equal((await acquireWithExecutor(failing(noHost({ 'a:9042': unavailable, 'b:9042': timeout })), 'lock', 'none', topology)).status, 'unavailable');
+        assert.equal((await acquireWithExecutor(failing(noHost({})), 'lock', 'none', topology)).status, 'unavailable');
+    });
+
     // Invariant: topology and offline membership are explicit and internally consistent.
     // Failure caught: missing variables silently became an inferred one-node topology.
     // Negative control: the complete topology below resolves and selects SERIAL.
