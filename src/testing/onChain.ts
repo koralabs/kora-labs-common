@@ -3,6 +3,7 @@
  * indexer or the UI. Each assertion throws on mismatch so the calling scope fails. Blockfrost is
  * reached through the shared rate-limited transport (./blockfrost).
  */
+import { bech32 } from 'bech32';
 import cbor from 'cbor';
 import { RateLimitedError } from '../chain/transport/rateLimit';
 import { BlockfrostAccess, blockfrostGet } from './blockfrost';
@@ -102,12 +103,20 @@ export const assertCip68Label = async (chain: ChainConfig, policyId: string, nam
     }
 };
 
-/** Assert an asset's total on-chain quantity is 0 (burned). */
-export const assertAssetBurned = async (chain: ChainConfig, assetUnit: string) => {
-    const asset = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${assetUnit}`);
-    if (!asset) return;
-    const quantity = asset.quantity ?? '0';
-    if (BigInt(quantity) !== BigInt(0)) throw new Error(`onChain: expected ${assetUnit} burned, quantity is ${quantity}`);
+/**
+ * Assert an asset's total on-chain quantity is 0 (burned; 404 = burned and pruned). Blockfrost's
+ * aggregate quantity lags its own tx views for a short while after a burn confirms, so it is polled
+ * up to `timeoutMs` (default: one read) — the requirement itself (exactly 0) never changes.
+ */
+export const assertAssetBurned = async (chain: ChainConfig, assetUnit: string, { timeoutMs = 0, pollMs = 10_000 }: { timeoutMs?: number; pollMs?: number } = {}) => {
+    const start = Date.now();
+    for (;;) {
+        const asset = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${assetUnit}`);
+        const quantity = asset?.quantity ?? '0';
+        if (BigInt(quantity) === BigInt(0)) return;
+        if (Date.now() - start >= timeoutMs) throw new Error(`onChain: expected ${assetUnit} burned, quantity is ${quantity}`);
+        await new Promise((r) => setTimeout(r, pollMs));
+    }
 };
 
 /** Assert a tx paid at least `minLovelace` (summed over outputs) to `toAddress`. */
@@ -147,4 +156,49 @@ export const cip68Field = (map: Map<Buffer, unknown>, key: string): string | nul
         return String(v);
     }
     return null;
+};
+
+export type AddressUtxo = TxUtxoOutput & { tx_hash: string };
+
+/** Every UTxO at an address (all pages). Empty for an address that has never been used. */
+export const fetchAddressUtxos = async (chain: ChainConfig, address: string): Promise<AddressUtxo[]> => {
+    const all: AddressUtxo[] = [];
+    for (let page = 1; ; page++) {
+        const batch = await blockfrostGet<AddressUtxo[]>(chain, `/addresses/${address}/utxos?count=100&page=${page}`);
+        if (!batch) break;
+        all.push(...batch);
+        if (batch.length < 100) break;
+    }
+    return all;
+};
+
+/** What an address holds, chain truth: unit (policy + asset name hex, or 'lovelace') -> quantity. Empty for an unused address. */
+export const addressHoldings = async (chain: ChainConfig, address: string): Promise<Map<string, bigint>> => {
+    const body = await blockfrostGet<{ amount: { unit: string; quantity: string }[] }>(chain, `/addresses/${address}`);
+    return new Map((body?.amount ?? []).map((a) => [a.unit, BigInt(a.quantity)]));
+};
+
+export interface TxPlacement {
+    blockHeight: number;
+    /** Block time, POSIX seconds. */
+    blockTime: number;
+    /** Position of the tx in its block. */
+    index: number;
+}
+
+/** Where a confirmed tx sits on chain. */
+export const fetchTxPlacement = async (chain: ChainConfig, txHash: string): Promise<TxPlacement> => {
+    const tx = await getJson<{ block_height: number; block_time: number; index: number }>(chain, `/txs/${txHash}`);
+    return { blockHeight: tx.block_height, blockTime: tx.block_time, index: tx.index };
+};
+
+/** Payment credential hash of a bech32 Shelley address (base/enterprise). */
+export const addressPaymentHash = (bech32Address: string): string =>
+    Buffer.from(bech32.fromWords(bech32.decode(bech32Address, 256).words)).subarray(1, 29).toString('hex');
+
+/** Enterprise address of a script hash (e.g. a validator's address). */
+export const scriptEnterpriseAddress = (scriptHash: string, network: string): string => {
+    const mainnet = network === 'mainnet';
+    const bytes = Buffer.concat([Buffer.from([0x70 | (mainnet ? 1 : 0)]), Buffer.from(scriptHash, 'hex')]);
+    return bech32.encode(mainnet ? 'addr' : 'addr_test', bech32.toWords(bytes), 256);
 };
