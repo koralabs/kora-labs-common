@@ -11,3 +11,6 @@
 - [Technical Spec](./spec/spec.md)
 - [Modules and Data](./spec/modules-and-data.md)
 - [USER_ISSUE Logging Contract](./spec/user-issue-logging.md)
+
+## Canonical contract
+- [Canonical contract (must-never-violate rules)](../CANONICAL_CONTRACT.md)
