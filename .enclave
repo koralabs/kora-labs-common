@@ -16,7 +16,6 @@ src/cronLock/
 src/mpt/
 
 # C3 chain-accurate handles and datums
-src/handles/
 src/chain/datum/
 src/constants/contractsRegistry.ts
 
@@ -24,12 +23,6 @@ src/constants/contractsRegistry.ts
 src/aws/jwtSigner.ts
 src/aws/kmsEnvironment.ts
 src/utils/crypto/
-src/wallet/
-src/txBuild/
-src/tx/
 
 # Rate limits
 src/http/
-
-# Deploy path
-.github/workflows/

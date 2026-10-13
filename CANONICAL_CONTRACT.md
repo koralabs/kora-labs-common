@@ -31,7 +31,7 @@ K.O.R.A.'s `merge_pr` asks the operator before a change to it merges into `maste
 |---|---|
 | 1 | `src/logger/` |
 | 2 | `src/cronLock/cqlCronLock.ts`, `src/mpt/` |
-| 3 | `src/handles/`, `src/chain/datum/` |
+| 3 | `src/chain/datum/`, `src/constants/contractsRegistry.ts` |
 | 4 | `src/http/` |
 
 ## Refactor needed for enforcement
