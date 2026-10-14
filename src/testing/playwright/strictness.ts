@@ -34,6 +34,11 @@ export interface OnChainEffectGate {
 export const useOnChainEffectGate = (test: AnyTest, options: OnChainEffectGateOptions = {}): OnChainEffectGate => {
     const verified = new Set<string>();
     const log = options.log ?? console.log;
+    // Proof belongs to this attempt, never a previous execution with the same test ID.
+    // eslint-disable-next-line no-empty-pattern
+    test.beforeEach(async ({}, testInfo) => {
+        verified.delete(testInfo.testId);
+    });
     // Playwright requires the fixtures argument to be an object pattern.
     // eslint-disable-next-line no-empty-pattern
     test.afterEach(async ({}, testInfo) => {
@@ -46,6 +51,7 @@ export const useOnChainEffectGate = (test: AnyTest, options: OnChainEffectGateOp
     });
     return {
         assertOnChainEffect: async (testInfo, description, verify) => {
+            verified.delete(testInfo.testId);
             await test.step(`on-chain effect: ${description}`, verify);
             verified.add(testInfo.testId);
             log(`[on-chain verified] ${testInfo.title} — ${description}`);
@@ -112,7 +118,7 @@ export interface LiveSuiteStrictnessOptions {
  * with `readSuiteSource`.
  */
 export const defineLiveSuiteStrictness = (test: AnyTest, options: LiveSuiteStrictnessOptions) => {
-    const { raw, code } = readSuiteSource(options.specFile);
+    const { code } = readSuiteSource(options.specFile);
     const prefix = options.title ?? 'live suite';
     const proof = stateless(options.proof ?? /assertOnChainEffect\(/);
     const fail = (message: string) => {
@@ -131,7 +137,7 @@ export const defineLiveSuiteStrictness = (test: AnyTest, options: LiveSuiteStric
     });
 
     test(`${prefix}: every scope proves an on-chain effect`, () => {
-        const scopes = scopeBodies(raw, options.scopeTitle);
+        const scopes = scopeBodies(code, options.scopeTitle);
         if (scopes.length < options.minScopes) fail(`found ${scopes.length} scopes, expected at least ${options.minScopes} (the scope parser or the suite broke)`);
         const missing = scopes.filter((scope) => !proof.test(scope.body)).map((scope) => scope.title);
         if (missing.length) fail(`these scopes can pass on UI state alone (no ${proof}): ${missing.join(', ')}`);

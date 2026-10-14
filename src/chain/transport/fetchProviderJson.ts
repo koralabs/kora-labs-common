@@ -1,5 +1,4 @@
-import { asyncForEach } from '../../utils';
-import { HeaderReader, RateLimitedError, recordRateLimit, statedWaitMs, waitForRateLimit } from './rateLimit';
+import { HeaderReader, RateLimitedError, rateLimitWaitRemainingMs, recordRateLimit, statedWaitMs, waitForRateLimit } from './rateLimit';
 
 // Shared provider transport: rate-limited, retrying JSON fetch with provider-aware payload-error
 // detection. Ported from the handle.me BFF (the mature implementation) into kora-labs-common so
@@ -90,18 +89,16 @@ const processRateLimitedQueue = async (key: string): Promise<void> => {
             const pending = state.pending.splice(0, state.pending.length);
             const delayInMilliseconds = Math.ceil(1000 / Math.max(1, state.maxRps));
 
-            await asyncForEach(
-                pending,
-                async (queuedTask) => {
-                    try {
-                        const value = await queuedTask.task();
-                        queuedTask.resolve(value);
-                    } catch (error) {
-                        queuedTask.reject(error);
-                    }
-                },
-                delayInMilliseconds
-            );
+            // Same-key dispatch waits for the entire response's rate signals, not headers alone.
+            for (const queuedTask of pending) {
+                try {
+                    const value = await queuedTask.task();
+                    queuedTask.resolve(value);
+                } catch (error) {
+                    queuedTask.reject(error);
+                }
+                await delay(delayInMilliseconds);
+            }
         }
     } finally {
         state.processing = false;
@@ -148,10 +145,18 @@ const getProviderPayloadError = (provider: ProviderName, value: unknown): Provid
     return null;
 };
 
+// Only errors constructed from an observed provider response carry this provenance.
+const observedResponseStatuses = new WeakMap<object, number>();
+
+/** Actual response status, independent of public error fields; undefined for unobserved errors. */
+export const observedProviderHttpStatus = (error: unknown): number | undefined =>
+    typeof error === 'object' && error !== null ? observedResponseStatuses.get(error) : undefined;
+
 const createProviderError = ({
     provider,
     status,
     statusText,
+    httpStatus,
     payload,
     responseText,
     cause
@@ -159,6 +164,7 @@ const createProviderError = ({
     provider: ProviderName;
     status: number;
     statusText: string;
+    httpStatus?: number;
     payload?: unknown;
     responseText?: string;
     cause?: Error;
@@ -166,6 +172,10 @@ const createProviderError = ({
     const error: any = new Error(`${provider} request failed: ${status} ${statusText}`.trim());
     if (cause) error.cause = cause;
     error.status = status;
+    if (httpStatus !== undefined) {
+        error.httpStatus = httpStatus;
+        observedResponseStatuses.set(error, httpStatus);
+    }
     error.statusText = statusText;
     if (payload !== undefined) {
         error[`${provider.toLowerCase()}Response`] = payload;
@@ -237,20 +247,24 @@ export const fetchProviderJson = async <T>({
         await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
         let rateLimited: { waitMs: number | null; error: Error } | undefined;
         try {
-            const response = await runRateLimitedTask(rateLimitKey, maxRps, () => fetcher(url, { method, headers, body }));
-
-            const responseText = await response.text();
-            const { value: parsed, parseError } = parseJson(responseText);
-
-            if (response.ok && isQuotaExhausted(response.headers)) {
-                const waitMs = statedWaitMs(response.headers, undefined);
-                if (waitMs !== null) recordRateLimit(rateLimitKey, waitMs);
-            }
+            const { response, responseText, parsed, parseError, statedWait } = await runRateLimitedTask(rateLimitKey, maxRps, async () => {
+                await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
+                const response = await fetcher(url, { method, headers, body });
+                const receivedAt = Date.now();
+                const headerWait = statedWaitMs(response.headers, undefined, receivedAt, response.status);
+                if (headerWait !== null) recordRateLimit(rateLimitKey, headerWait, receivedAt);
+                const responseText = await response.text();
+                const { value: parsed, parseError } = parseJson(responseText);
+                const statedWait = statedWaitMs(response.headers, parsed, receivedAt, response.status);
+                if (statedWait !== null) recordRateLimit(rateLimitKey, statedWait, receivedAt);
+                return { response, responseText, parsed, parseError, statedWait };
+            });
 
             if (parseError && responseText) {
                 throw createProviderError({
                     provider,
                     status: response.status,
+                    httpStatus: response.status,
                     statusText: response.statusText,
                     responseText,
                     cause: parseError
@@ -262,8 +276,8 @@ export const fetchProviderJson = async <T>({
                 const status = Number(payloadError?.status_code ?? payloadError?.status ?? response.status);
                 const statusText =
                     response.statusText || `${payloadError?.error ?? payloadError?.message ?? 'Request failed'}`;
-                const error = createProviderError({ provider, status, statusText, payload: payloadError ?? parsed, responseText });
-                const waitMs = statedWaitMs(response.headers, parsed);
+                const error = createProviderError({ provider, status, httpStatus: response.status, statusText, payload: payloadError ?? parsed, responseText });
+                const waitMs = statedWait === null ? null : rateLimitWaitRemainingMs(rateLimitKey);
                 if (status === 429 || waitMs !== null) {
                     rateLimited = { waitMs, error };
                 } else {
@@ -284,7 +298,6 @@ export const fetchProviderJson = async <T>({
         // Rate limited: never call again before the stated time; with no stated time, stop.
         const { waitMs, error } = rateLimited;
         if (waitMs === null) throw error;
-        recordRateLimit(rateLimitKey, waitMs);
         // Sitting out a stated wait is not a blind retry, so it does not spend `maxRetries` — but it is bounded.
         if (++rateLimitWaits > MAX_RATE_LIMIT_WAITS || waitMs > maxRateLimitWaitMs) {
             throw new RateLimitedError(rateLimitKey, waitMs, error.message);
@@ -292,5 +305,3 @@ export const fetchProviderJson = async <T>({
     }
 };
 
-const isQuotaExhausted = (headers: HeaderReader | undefined) =>
-    headers?.get('x-ratelimit-remaining')?.trim() === '0' || headers?.get('ratelimit-remaining')?.trim() === '0';

@@ -44,6 +44,12 @@ Multiple services in the Handles ecosystem need the same core behavior (address 
 - Provide protected-word availability checks with number-replacement and phrase detection flows.
 - Keep known-contract registry mapping available for address-owner attribution.
 
+### Shared Live Browser Test Harness
+- Share live CIP-30 suite configuration, preflight, proof gates and evidence through the testing subpaths.
+- Each executing scope must prove its required on-chain effects during that attempt; failed later verification invalidates an earlier proof.
+- Completed scope evidence requires both a success screenshot and a recorded video.
+- Payment credential reads reject unsupported or malformed addresses; script address construction rejects invalid hashes and networks.
+
 ## Success Criteria
 - Package exports remain type-safe and stable for downstream services.
 - Docs describe all major module surfaces and expected runtime inputs.

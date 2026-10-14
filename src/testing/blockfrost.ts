@@ -4,7 +4,7 @@
  * remembered process-wide and never undercut, and a wait too long to sit out surfaces as
  * `RateLimitedError` instead of a retry.
  */
-import { fetchProviderJson, ProviderRequestOptions } from '../chain/transport/fetchProviderJson';
+import { fetchProviderJson, observedProviderHttpStatus, ProviderRequestOptions } from '../chain/transport/fetchProviderJson';
 
 export type LiveNetwork = 'preview' | 'preprod' | 'mainnet';
 
@@ -30,9 +30,11 @@ const request = <T>(access: BlockfrostAccess, path: string, init: { method?: str
 /** GET `path`; null when Blockfrost answers 404 (never used / not on chain yet). */
 export const blockfrostGet = async <T>(access: BlockfrostAccess, path: string): Promise<T | null> => {
     try {
-        return await request<T>(access, path);
+        const result = await request<T>(access, path);
+        if (result === null) throw new Error(`Blockfrost GET ${path} returned successful JSON null; absence requires HTTP 404`);
+        return result;
     } catch (error) {
-        if ((error as { status?: number }).status === 404) return null;
+        if (observedProviderHttpStatus(error) === 404) return null;
         throw error;
     }
 };

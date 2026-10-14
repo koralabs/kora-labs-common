@@ -42,16 +42,20 @@ const parseReset = (raw: string | null | undefined, now: number): number | null 
 };
 
 const bodyWaitMs = (body: unknown): number | null => {
-    if (!body || typeof body !== 'object') return null;
-    const record = body as Record<string, any>;
-    // Discord: { retry_after: seconds }
-    const retryAfter = parseSeconds(record.retry_after === undefined ? undefined : String(record.retry_after));
-    if (retryAfter !== null) return toMs(retryAfter);
-    // Google: { error: { details: [{ '@type': '...RetryInfo', retryDelay: '1.5s' }] } }
-    const details: any[] = record.error?.details ?? [];
-    const retryInfo = details.find((d) => typeof d?.['@type'] === 'string' && d['@type'].endsWith('RetryInfo'));
-    const delay = parseSeconds(retryInfo?.retryDelay);
-    return delay === null ? null : toMs(delay);
+    const waits: number[] = [];
+    for (const entry of Array.isArray(body) ? body : [body]) {
+        if (!entry || typeof entry !== 'object') continue;
+        const record = entry as Record<string, any>;
+        const retryAfter = parseSeconds(record.retry_after === undefined ? undefined : String(record.retry_after));
+        if (retryAfter !== null) waits.push(toMs(retryAfter));
+        const details = record.error?.details;
+        for (const detail of Array.isArray(details) ? details : []) {
+            if (typeof detail?.['@type'] !== 'string' || !detail['@type'].endsWith('google.rpc.RetryInfo')) continue;
+            const delay = parseSeconds(detail.retryDelay);
+            if (delay !== null) waits.push(toMs(delay));
+        }
+    }
+    return waits.length ? Math.max(...waits) : null;
 };
 
 /**
@@ -59,13 +63,15 @@ const bodyWaitMs = (body: unknown): number | null => {
  * date), X-RateLimit-Reset-After, RateLimit-Reset, X-RateLimit-Remaining: 0 + X-RateLimit-Reset,
  * and waits written in the body (Discord `retry_after`, Google `RetryInfo.retryDelay`).
  */
-export const statedWaitMs = (headers: HeaderReader | undefined, body: unknown, now = Date.now()): number | null => {
+export const statedWaitMs = (headers: HeaderReader | undefined, body: unknown, now = Date.now(), status?: number): number | null => {
     const header = (name: string) => headers?.get(name) ?? null;
+    const exhausted = status === 429 || header('x-ratelimit-remaining')?.trim() === '0' || header('ratelimit-remaining')?.trim() === '0';
+    const resetApplies = status === undefined || exhausted;
     const candidates = [
         parseRetryAfter(header('retry-after'), now),
-        parseSeconds(header('x-ratelimit-reset-after')) === null ? null : toMs(parseSeconds(header('x-ratelimit-reset-after'))!),
-        parseSeconds(header('ratelimit-reset')) === null ? null : toMs(parseSeconds(header('ratelimit-reset'))!),
-        header('x-ratelimit-remaining')?.trim() === '0' ? parseReset(header('x-ratelimit-reset'), now) : null,
+        !resetApplies || parseSeconds(header('x-ratelimit-reset-after')) === null ? null : toMs(parseSeconds(header('x-ratelimit-reset-after'))!),
+        !resetApplies || parseSeconds(header('ratelimit-reset')) === null ? null : toMs(parseSeconds(header('ratelimit-reset'))!),
+        exhausted ? parseReset(header('x-ratelimit-reset'), now) : null,
         bodyWaitMs(body)
     ].filter((ms): ms is number => ms !== null);
     return candidates.length > 0 ? Math.max(...candidates) : null;

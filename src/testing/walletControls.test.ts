@@ -1,3 +1,4 @@
+import { bech32 } from 'bech32';
 import { resetRateLimits } from '../chain/transport/rateLimit';
 import type { LiveWallet } from './liveWallet';
 import { addressHoldings, addressPaymentHash, assertAssetBurned, fetchAddressUtxos, fetchTxPlacement, scriptEnterpriseAddress } from './onChain';
@@ -94,6 +95,27 @@ describe('chain reads', () => {
         expect(addressPaymentHash(scriptEnterpriseAddress(hash, 'preview'))).toBe(hash);
         expect(scriptEnterpriseAddress(hash, 'preview').startsWith('addr_test1w')).toBe(true);
         expect(scriptEnterpriseAddress(hash, 'mainnet').startsWith('addr1w')).toBe(true);
+    });
+
+    // Invariant: a stake credential or malformed address is never reported as a payment credential.
+    // Failure caught: byte slicing silently accepted reward addresses, invalid lengths and wrong prefixes.
+    it('validates payment address type, length and network prefix', () => {
+        const payment = Buffer.from('ab'.repeat(28), 'hex');
+        const stake = Buffer.from('cd'.repeat(28), 'hex');
+        const address = (prefix: string, header: number, tail: Buffer) => bech32.encode(prefix, bech32.toWords(Buffer.concat([Buffer.from([header]), tail])), 256);
+        expect(addressPaymentHash(address('addr', 0x01, Buffer.concat([payment, stake])))).toBe('ab'.repeat(28));
+        expect(addressPaymentHash(address('addr_test', 0x60, payment))).toBe('ab'.repeat(28));
+        for (const invalid of [address('stake_test', 0xe0, stake), address('addr_test', 0x70, payment.subarray(1)), address('addr_test', 0x71, payment), address('addr', 0x00, Buffer.concat([payment, stake]))]) {
+            expect(() => addressPaymentHash(invalid)).toThrow('valid Shelley base or enterprise payment address');
+        }
+    });
+
+    // Invariant: invalid script hashes or mistyped networks never become another chain address.
+    // Failure caught: Buffer.from truncated nonhex/short inputs and unknown networks silently chose testnet.
+    it('rejects malformed script hashes and unknown networks', () => {
+        for (const hash of ['ab', 'gg'.repeat(28), 'ab'.repeat(29)]) expect(() => scriptEnterpriseAddress(hash, 'preview')).toThrow('script hash must be 28 bytes');
+        expect(() => scriptEnterpriseAddress('ab'.repeat(28), 'mainent')).toThrow('unknown network mainent');
+        expect(addressPaymentHash(scriptEnterpriseAddress('AB'.repeat(28), 'preprod'))).toBe('ab'.repeat(28));
     });
 
     it('assertAssetBurned polls a lagging quantity until it reads 0, and fails when it never does', async () => {

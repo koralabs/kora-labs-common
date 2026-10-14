@@ -55,7 +55,7 @@ export const createEvidence = (options: EvidenceOptions): Evidence => {
     const finalizeVideo = async (page: Page, slug: string) => {
         const video = page.video();
         if (!page.isClosed()) await page.close();
-        if (!video) return;
+        if (!video) throw new Error(`${slug}: video recording is unavailable; the scope evidence is incomplete.`);
         const target = path.join(dir, `${slug}.webm`);
         mkdirSync(dir, { recursive: true });
         if (!options.trimVideo) {

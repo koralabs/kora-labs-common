@@ -112,8 +112,12 @@ export const assertAssetBurned = async (chain: ChainConfig, assetUnit: string, {
     const start = Date.now();
     for (;;) {
         const asset = await blockfrostGet<{ quantity?: string }>(chain, `/assets/${assetUnit}`);
-        const quantity = asset?.quantity ?? '0';
-        if (BigInt(quantity) === BigInt(0)) return;
+        if (asset === null) return; // The producer reserves null for a genuine HTTP 404.
+        const quantity = asset?.quantity;
+        if (typeof quantity !== 'string' || !/^(0|[1-9][0-9]*)$/.test(quantity)) {
+            throw new Error(`onChain: cannot prove ${assetUnit} burned from an invalid or missing quantity`);
+        }
+        if (quantity === '0') return;
         if (Date.now() - start >= timeoutMs) throw new Error(`onChain: expected ${assetUnit} burned, quantity is ${quantity}`);
         await new Promise((r) => setTimeout(r, pollMs));
     }
@@ -193,11 +197,22 @@ export const fetchTxPlacement = async (chain: ChainConfig, txHash: string): Prom
 };
 
 /** Payment credential hash of a bech32 Shelley address (base/enterprise). */
-export const addressPaymentHash = (bech32Address: string): string =>
-    Buffer.from(bech32.fromWords(bech32.decode(bech32Address, 256).words)).subarray(1, 29).toString('hex');
+export const addressPaymentHash = (bech32Address: string): string => {
+    const decoded = bech32.decode(bech32Address, 256);
+    const bytes = Buffer.from(bech32.fromWords(decoded.words));
+    const type = bytes[0] >> 4;
+    const network = bytes[0] & 0x0f;
+    const length = type <= 3 ? 57 : type === 6 || type === 7 ? 29 : 0;
+    if (!length || bytes.length !== length || network > 1 || decoded.prefix !== (network === 1 ? 'addr' : 'addr_test')) {
+        throw new Error('onChain: expected a valid Shelley base or enterprise payment address');
+    }
+    return bytes.subarray(1, 29).toString('hex');
+};
 
 /** Enterprise address of a script hash (e.g. a validator's address). */
 export const scriptEnterpriseAddress = (scriptHash: string, network: string): string => {
+    if (!/^[0-9a-f]{56}$/i.test(scriptHash)) throw new Error('onChain: script hash must be 28 bytes of hexadecimal');
+    if (!['preview', 'preprod', 'mainnet'].includes(network)) throw new Error(`onChain: unknown network ${network}`);
     const mainnet = network === 'mainnet';
     const bytes = Buffer.concat([Buffer.from([0x70 | (mainnet ? 1 : 0)]), Buffer.from(scriptHash, 'hex')]);
     return bech32.encode(mainnet ? 'addr' : 'addr_test', bech32.toWords(bytes), 256);

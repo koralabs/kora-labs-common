@@ -49,13 +49,15 @@ describe('env', () => {
 
 // A stand-in for Playwright's `test` that records registrations.
 const fakeTest = () => {
+    const beforeHooks: ((fixtures: object, testInfo: unknown) => Promise<void>)[] = [];
     const hooks: ((fixtures: object, testInfo: unknown) => Promise<void>)[] = [];
     const tests: { title: string; fn: () => void }[] = [];
     const test = Object.assign((title: string, fn: () => void) => tests.push({ title, fn }), {
+        beforeEach: (fn: (typeof beforeHooks)[number]) => beforeHooks.push(fn),
         afterEach: (fn: (typeof hooks)[number]) => hooks.push(fn),
         step: async (_title: string, fn: () => Promise<void>) => fn()
     });
-    return { test: test as never, hooks, tests };
+    return { test: test as never, hooks, beforeHooks, tests };
 };
 
 describe('useOnChainEffectGate', () => {
@@ -78,6 +80,33 @@ describe('useOnChainEffectGate', () => {
         expect(gate.isVerified({ testId: 't1' })).toBe(false);
         await expect(hooks[0]({}, info('failed'))).resolves.toBeUndefined();
         await expect(hooks[0]({}, info('passed', 'resumed'))).resolves.toBeUndefined();
+    });
+
+    // Invariant: each execution proves its own effect; a previous execution cannot green-light it.
+    // Failure caught: a proof survives a repeat/retry sharing the test ID. Original source fails this.
+    it('requires a fresh proof when another attempt uses the same test ID', async () => {
+        const { test, hooks, beforeHooks } = fakeTest();
+        const gate = useOnChainEffectGate(test, { log: quiet });
+        await gate.assertOnChainEffect(info('passed'), 'first attempt effect', async () => undefined);
+        await hooks[0]({}, info('passed'));
+        for (const hook of beforeHooks) await hook({}, info('passed'));
+        expect(gate.isVerified({ testId: 't1' })).toBe(false);
+        await expect(hooks[0]({}, info('passed'))).rejects.toThrow('passed without proving an on-chain effect');
+        await gate.assertOnChainEffect(info('passed'), 'fresh effect', async () => undefined);
+        await expect(hooks[0]({}, info('passed'))).resolves.toBeUndefined();
+    });
+
+    // Invariant: the latest required verification must succeed, even when a caller catches its error.
+    // Failure caught: a successful earlier verification conceals a later absent effect. Original fails.
+    it('invalidates the earlier proof when a later verification fails', async () => {
+        const { test, hooks } = fakeTest();
+        const gate = useOnChainEffectGate(test, { log: quiet });
+        await gate.assertOnChainEffect(info('passed'), 'first effect', async () => undefined);
+        await expect(gate.assertOnChainEffect(info('passed'), 'required later effect', async () => {
+            throw new Error('required token absent');
+        })).rejects.toThrow('required token absent');
+        expect(gate.isVerified({ testId: 't1' })).toBe(false);
+        await expect(hooks[0]({}, info('passed'))).rejects.toThrow('passed without proving an on-chain effect');
     });
 
     it('the registered hook uses an object pattern for fixtures (Playwright rejects anything else)', () => {
@@ -122,6 +151,13 @@ test('scope 02: burn', async () => { await proveBurn(); });
         expect(run(GOOD.replace('await proveBurn();', 'await page.click(x);')).join()).toMatch(/UI state alone.*scope 02: burn/);
         expect(run(GOOD, { minScopes: 3 }).join()).toMatch(/found 2 scopes, expected at least 3/);
         expect(run(GOOD.replace('proveBurn();', 'proveBurn().catch(() => false);'), { banned: [SOFT_FAIL_CATCH] }).join()).toMatch(/soft-fail catch/);
+    });
+
+    // Invariant: commented-out verification cannot satisfy the source preflight.
+    // Failure caught: deleting a proof but leaving its name in a comment yields a green meta-test.
+    it('rejects a scope whose only proof is a comment', () => {
+        const unproven = GOOD.replace('await proveBurn();', '\n// await proveBurn();\nawait page.click(x);');
+        expect(run(unproven).join()).toMatch(/UI state alone.*scope 02: burn/);
     });
 
     it('scopeBodies splits at each scope and stripCommentLines drops prose lines', () => {
@@ -199,6 +235,27 @@ describe('createEvidence', () => {
         await expect(evidence.saveEvidence(page, testInfo as never, 'scope-02', '#ok', 5)).rejects.toThrow('scope-02: success state "#ok" not reached');
         await evidence.saveVideo(page, testInfo as never);
         expect(events).toEqual(['screenshot scope-02-failure.png', 'close', 'video scope-02.webm']);
+    });
+
+    // Invariant: a scope cannot claim complete evidence when recording was disabled.
+    // Failure caught: a success screenshot silently substitutes for the required screenshot + video.
+    it('fails evidence finalization when the page has no recording', async () => {
+        const dir = tmp();
+        const evidence = createEvidence({ dir, log: quiet });
+        const testInfo = { annotations: [] as { type: string; description?: string }[] };
+        let closed = false;
+        const page = {
+            locator: () => ({ first: () => ({ waitFor: async () => undefined }) }),
+            screenshot: async ({ path: target }: { path: string }) => writeFileSync(target, 'png'),
+            video: () => null,
+            isClosed: () => closed,
+            close: async () => { closed = true; }
+        };
+        await evidence.saveEvidence(page as never, testInfo as never, 'scope-no-video', '#ok');
+        await expect(evidence.saveVideo(page as never, testInfo as never)).rejects.toThrow('scope-no-video: video recording is unavailable');
+        expect(closed).toBe(true);
+        expect(readFileSync(path.join(dir, 'scope-no-video-success.png'), 'utf8')).toBe('png');
+        expect(existsSync(path.join(dir, 'scope-no-video.webm'))).toBe(false);
     });
 
     it('saveVideo does nothing for a scope without evidence; tab evidence closes its own tab', async () => {
