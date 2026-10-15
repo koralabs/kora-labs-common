@@ -43,6 +43,7 @@ Multiple services in the Handles ecosystem need the same core behavior (address 
 ### Safety and Policy Utilities
 - Provide protected-word availability checks with number-replacement and phrase detection flows.
 - Keep known-contract registry mapping available for address-owner attribution.
+- Distributed cron locks must preserve cross-DC exclusive ownership and fail closed on uncertainty. Concurrent callers must share a coordinator rather than create competing Paxos leaders; declared-offline operation keeps its existing local consistency semantics.
 
 ### Shared Live Browser Test Harness
 - Share live CIP-30 suite configuration, preflight, proof gates and evidence through the testing subpaths.

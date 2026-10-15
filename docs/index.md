@@ -10,4 +10,5 @@
 - [Spec Index](./spec/index.md)
 - [Technical Spec](./spec/spec.md)
 - [Modules and Data](./spec/modules-and-data.md)
+- [Cron-lock Coordinator](./spec/cron-lock-coordinator.md)
 - [USER_ISSUE Logging Contract](./spec/user-issue-logging.md)

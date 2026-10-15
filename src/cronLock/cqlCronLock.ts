@@ -19,8 +19,9 @@
  * overlapping ticks on one box from mistaking node identity for lock ownership.
  */
 import { randomUUID } from 'node:crypto';
-import { Client, errors, types } from 'cassandra-driver';
+import { errors, types } from 'cassandra-driver';
 import { LogCategory, Logger } from '../logger';
+import { createCqlExecutor } from './cqlClient';
 
 const KEYSPACE = 'kora_locks';
 const LOCK_TABLE = 'cron_lock';
@@ -88,18 +89,14 @@ const leaseSeconds = (override?: number) => Math.ceil(leaseMs(override) / 1000);
 
 const scopeName = (name: string, topology: CronLockTopology): string => `${topology.network}:${name}`;
 
-let client: Client | null = null;
+let client: CqlExecutor | null = null;
 let clientTopologyKey = '';
 const ensured = new WeakSet<CqlExecutor>();
 
-const getClient = (topology: CronLockTopology): Client => {
+const getClient = (topology: CronLockTopology): CqlExecutor => {
     const topologyKey = JSON.stringify([topology.contactPoints, topology.localDataCenter]);
     if (!client || clientTopologyKey !== topologyKey) {
-        client = new Client({
-            contactPoints: topology.contactPoints,
-            localDataCenter: topology.localDataCenter,
-            socketOptions: { connectTimeout: 8000, readTimeout: 12000 }
-        });
+        client = createCqlExecutor(topology);
         clientTopologyKey = topologyKey;
     }
     return client;
