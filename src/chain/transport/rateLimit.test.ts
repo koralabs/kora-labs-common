@@ -84,3 +84,86 @@ describe('fetchProviderJson with an early-firing timer', () => {
         expect(remainingAtCall).toEqual([0, 0]);
     });
 });
+
+// Invariant: the longest provider wait binds all callers, even if shorter hints appear first.
+// Negative control: the original first-body-hint implementation re-calls after one second.
+describe('shared live harness provider waits', () => {
+    it('honors all body RetryInfo hints and the header maximum before a retry', async () => {
+        const times: number[] = [];
+        const fetcher = async () => {
+            times.push(Date.now());
+            return times.length === 1
+                ? jsonResponse(429, JSON.stringify({ retry_after: 1, error: { details: [
+                    { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '2s' },
+                    { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '4s' }
+                ] } }), { 'retry-after': '3' })
+                : jsonResponse(200, '{"ok":true}');
+        };
+        expect(await fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'all-hints', maxRps: 1000, fetcher })).toEqual({ ok: true });
+        expect(times).toHaveLength(2);
+        expect(times[1] - times[0]).toBeGreaterThanOrEqual(4000);
+    });
+
+    // Invariant: a final rejection preserves a reset-only 429 wait for another caller.
+    // Negative control: original ignores reset epoch without Remaining: 0 and calls again.
+    it('persists a reset-only 429 across callers without an early retry', async () => {
+        let calls = 0;
+        const at = now;
+        const fetcher = async () => {
+            calls++;
+            return jsonResponse(429, '{"error":"limited","status_code":429}', { 'x-ratelimit-reset': String((at + 120_000) / 1000) });
+        };
+        const request = () => fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'reset-only', maxRps: 1000, maxRateLimitWaitMs: 5000, fetcher });
+        await expect(request()).rejects.toBeInstanceOf(RateLimitedError);
+        await expect(request()).rejects.toBeInstanceOf(RateLimitedError);
+        expect(calls).toBe(1);
+        expect(now + rateLimitWaitRemainingMs('reset-only')).toBe(at + 120_000);
+    });
+
+    // Invariant: provider waits survive malformed JSON, before a parse failure can trigger retries.
+    // Negative control: original parses first and loses all rate-limit evidence from malformed bodies.
+    it('preserves response header waits even when the body is malformed', async () => {
+        let calls = 0;
+        let receivedAt = 0;
+        const fetcher = async () => { calls++; receivedAt = now; return jsonResponse(503, 'not json', { 'retry-after': '120' }); };
+        const request = () => fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'bad-json-wait', maxRps: 1000, maxRetries: 0, maxRateLimitWaitMs: 5000, fetcher });
+        await expect(request()).rejects.toThrow('503');
+        expect(now + rateLimitWaitRemainingMs('bad-json-wait')).toBe(receivedAt + 120_000);
+        await expect(request()).rejects.toBeInstanceOf(RateLimitedError);
+        expect(calls).toBe(1);
+    });
+
+    // Invariant: delta waits start when headers arrive, and available success resets are not exhaustion.
+    // Negative control: original anchors the exhausted-success wait after the body delay.
+    it('anchors an exhausted success wait at receipt instead of after a slow body', async () => {
+        let receivedAt = 0;
+        const fetcher = async () => { receivedAt = now; return ({ ...jsonResponse(200, '{"ok":true}', { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset-after': '10' }), text: async () => { now += 2000; return '{"ok":true}'; } }); };
+        expect(await fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'slow-body', maxRps: 1000, fetcher })).toEqual({ ok: true });
+        expect(now - receivedAt).toBeGreaterThanOrEqual(2000);
+        expect(now + rateLimitWaitRemainingMs('slow-body')).toBe(receivedAt + 10_000);
+    });
+
+    // Invariant: admission before another response arrives never authorizes a call inside its wait.
+    // Negative control: original checks only before enqueue and dispatches the admitted second request.
+    it('rechecks a queued caller against the wait recorded by the preceding response', async () => {
+        let calls = 0;
+        let release: (response: ReturnType<typeof jsonResponse>) => void = () => undefined;
+        const firstResponse = new Promise<ReturnType<typeof jsonResponse>>((resolve) => { release = resolve; });
+        const fetcher = async () => { calls++; return calls === 1 ? firstResponse : jsonResponse(200, '{"wrongEarlyCall":true}'); };
+        const request = () => fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'admitted-wait', maxRps: 1000, maxRateLimitWaitMs: 5000, maxRetries: 0, fetcher });
+        const first = request();
+        while (!calls) await Promise.resolve();
+        const second = request().catch((error) => error);
+        await Promise.resolve();
+        release(jsonResponse(200, '{"ok":true}', { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset-after': '120' }));
+        expect(await first).toEqual({ ok: true });
+        expect(await second).toBeInstanceOf(RateLimitedError);
+        expect(calls).toBe(1);
+    });
+
+    it('does not invent exhaustion from available successful reset headers', async () => {
+        const fetcher = async () => jsonResponse(200, '{"ok":true}', { 'x-ratelimit-remaining': '5', 'x-ratelimit-reset-after': '120' });
+        expect(await fetchProviderJson({ provider: 'Blockfrost', url: 'https://offline', rateLimitKey: 'available', maxRps: 1000, fetcher })).toEqual({ ok: true });
+        expect(rateLimitWaitRemainingMs('available')).toBe(0);
+    });
+});
