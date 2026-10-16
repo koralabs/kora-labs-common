@@ -14,12 +14,13 @@ const response = (status: number, text: () => Promise<string>, headers: Record<s
     headers: { get: (name: string) => headers[name.toLowerCase()] ?? null }
 });
 
-// A pending body remains a same-key admission barrier; all waits use receipt time.
+// A pending body remains a same-key admission barrier. Header/body durations use their own receipt times.
+// Negative control: anchoring body waits at headers expires the first two holds3100ms early.
 it.each([
-    ['no header429/body wait', 429, {}, '{"error":"limited","status_code":429,"retry_after":600}', 600000],
-    ['short header/long body', 429, { 'retry-after': '1' }, '{"error":"limited","status_code":429,"retry_after":600}', 600000],
-    ['malformed body/header hold', 503, { 'retry-after': '600' }, 'not JSON', 600000]
-])('%s protects three queued callers and preserves unrelated-key progress', async (_name, status, headers, text, wait) => {
+    ['no header429/body wait', 429, {}, '{"error":"limited","status_code":429,"retry_after":600}', 600000, true],
+    ['short header/long body', 429, { 'retry-after': '1' }, '{"error":"limited","status_code":429,"retry_after":600}', 600000, true],
+    ['malformed body/header hold', 503, { 'retry-after': '600' }, 'not JSON', 600000, false]
+])('%s protects three queued callers and preserves unrelated-key progress', async (_name, status, headers, text, wait, bodyAnchor) => {
     const body = deferred(); const calls: string[] = []; const at = Date.now();
     const fetcher = async (url: string) => { calls.push(url); return url.endsWith('/first')
         ? response(status as number, () => body.promise, headers as Record<string, string>)
@@ -33,6 +34,7 @@ it.each([
     await jest.advanceTimersByTimeAsync(2000); // The short header expires; a longer body remains unknown.
     const before = [...calls];
     const other = await unrelated;
+    const bodyAt = Date.now();
     body.resolve(text as string);
     await jest.advanceTimersByTimeAsync(100);
     const results = [...await first, ...await rest];
@@ -41,7 +43,7 @@ it.each([
     expect(other).toEqual({ ok: true });
     expect(results.map(r => r.status)).toEqual(['rejected', 'rejected', 'rejected']);
     expect(results.slice(1).every(r => r.status === 'rejected' && r.reason instanceof RateLimitedError)).toBe(true);
-    expect(Date.now() + rateLimitWaitRemainingMs('body-three')).toBe(at + (wait as number));
+    expect(Date.now() + rateLimitWaitRemainingMs('body-three')).toBe((bodyAnchor ? bodyAt : at) + (wait as number));
 });
 
 // No stated wait does not create a fabricated hold, but still requires body completion.
