@@ -14,10 +14,39 @@ type ProviderErrorPayload = {
     status_code?: number;
 };
 
+export interface RateLimitResponse {
+    status: number;
+    headers?: HeaderReader;
+}
+
 type ProviderFetcher = (
     url: string,
-    init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array }
-) => Promise<{ ok: boolean; status: number; statusText: string; text: () => Promise<string>; headers?: HeaderReader }>;
+    init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array; redirect?: 'manual' }
+) => Promise<RateLimitResponse & { ok: boolean; statusText: string; text: () => Promise<string> }>;
+
+type ObservedBody =
+    | { ok: true; text: string; parsed: unknown; parseError: Error | null }
+    | { ok: false; error: unknown };
+
+export interface RateLimitedResponse<R> {
+    response: R;
+    body: ObservedBody;
+    /** This response supplied a hint (including zero), independent of another caller's hold. */
+    statedWait: boolean;
+}
+
+export interface RateLimitedResponseOptions<R extends RateLimitResponse> {
+    rateLimitKey: string;
+    maxRateLimitWaitMs?: number;
+    /** Omit to retain an unpaced caller's existing concurrency. */
+    maxRps?: number;
+    /** The actual producer must honor manual redirects; it must not follow inside this callback. */
+    dispatch: (options: { redirect: 'manual' }) => Promise<R>;
+    /** Optional native-error context, without wrapping the fetch promise before header observation. */
+    onDispatchError?: (error: unknown) => never;
+    /** Consume text for JSON callers; read a clone to preserve a raw Response's body. */
+    readText: (response: R) => Promise<string>;
+}
 
 interface ProviderRateLimitState {
     pending: QueuedProviderTask<any>[];
@@ -222,6 +251,50 @@ export const isRetriableError = (provider: ProviderName, error: any): boolean =>
     return false;
 };
 
+/** One admission/observation lifecycle for both JSON and raw-Response callers. No retries here. */
+export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
+    rateLimitKey,
+    maxRateLimitWaitMs = DEFAULT_MAX_RATE_LIMIT_WAIT_MS,
+    maxRps,
+    dispatch,
+    onDispatchError,
+    readText
+}: RateLimitedResponseOptions<R>): Promise<RateLimitedResponse<R>> => {
+    const start = async (): Promise<RateLimitedResponse<R>> => {
+        for (;;) {
+            await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
+            // A response can extend the floor in the await continuation gap.
+            // No await may separate this final check from actual dispatch.
+            if (rateLimitWaitRemainingMs(rateLimitKey) > 0) continue;
+            let pending: Promise<R>;
+            try {
+                pending = dispatch({ redirect: 'manual' });
+            } catch (error) {
+                if (onDispatchError) onDispatchError(error);
+                throw error;
+            }
+            return pending.then(async (response) => {
+                const headerAt = Date.now();
+                const headerWait = statedWaitMs(response.headers, undefined, headerAt, response.status);
+                if (headerWait !== null) recordRateLimit(rateLimitKey, headerWait, headerAt);
+                let text: string;
+                try {
+                    text = await readText(response);
+                } catch (error) {
+                    // Keep the original response/error for each caller's existing body contract.
+                    return { response, body: { ok: false, error }, statedWait: headerWait !== null };
+                }
+                const bodyAt = Date.now();
+                const { value: parsed, parseError } = parseJson(text);
+                const bodyWait = statedWaitMs(undefined, parsed, bodyAt, response.status);
+                if (bodyWait !== null) recordRateLimit(rateLimitKey, bodyWait, bodyAt);
+                return { response, body: { ok: true, text, parsed, parseError }, statedWait: headerWait !== null || bodyWait !== null };
+            }, onDispatchError);
+        }
+    };
+    return maxRps === undefined ? start() : runRateLimitedTask(rateLimitKey, maxRps, start);
+};
+
 const defaultFetch: ProviderFetcher = (url, init) => (globalThis as any).fetch(url, init);
 
 export const fetchProviderJson = async <T>({
@@ -247,18 +320,14 @@ export const fetchProviderJson = async <T>({
         await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
         let rateLimited: { waitMs: number | null; error: Error } | undefined;
         try {
-            const { response, responseText, parsed, parseError, statedWait } = await runRateLimitedTask(rateLimitKey, maxRps, async () => {
-                await waitForRateLimit(rateLimitKey, maxRateLimitWaitMs);
-                const response = await fetcher(url, { method, headers, body });
-                const receivedAt = Date.now();
-                const headerWait = statedWaitMs(response.headers, undefined, receivedAt, response.status);
-                if (headerWait !== null) recordRateLimit(rateLimitKey, headerWait, receivedAt);
-                const responseText = await response.text();
-                const { value: parsed, parseError } = parseJson(responseText);
-                const statedWait = statedWaitMs(response.headers, parsed, receivedAt, response.status);
-                if (statedWait !== null) recordRateLimit(rateLimitKey, statedWait, receivedAt);
-                return { response, responseText, parsed, parseError, statedWait };
+            const observed = await fetchRateLimitedResponse({
+                rateLimitKey, maxRateLimitWaitMs, maxRps,
+                dispatch: ({ redirect }) => fetcher(url, { method, headers, body, redirect }),
+                readText: (response) => response.text()
             });
+            if (!observed.body.ok) throw observed.body.error;
+            const { response, statedWait } = observed;
+            const { text: responseText, parsed, parseError } = observed.body;
 
             if (parseError && responseText) {
                 throw createProviderError({
@@ -277,7 +346,7 @@ export const fetchProviderJson = async <T>({
                 const statusText =
                     response.statusText || `${payloadError?.error ?? payloadError?.message ?? 'Request failed'}`;
                 const error = createProviderError({ provider, status, httpStatus: response.status, statusText, payload: payloadError ?? parsed, responseText });
-                const waitMs = statedWait === null ? null : rateLimitWaitRemainingMs(rateLimitKey);
+                const waitMs = statedWait ? rateLimitWaitRemainingMs(rateLimitKey) : null;
                 if (status === 429 || waitMs !== null) {
                     rateLimited = { waitMs, error };
                 } else {
@@ -287,7 +356,7 @@ export const fetchProviderJson = async <T>({
                 return parsed as T;
             }
         } catch (error: any) {
-            if (attempt >= maxRetries || !isRetriableError(provider, error)) {
+            if (error instanceof RateLimitedError || attempt >= maxRetries || !isRetriableError(provider, error)) {
                 throw error;
             }
             attempt++;

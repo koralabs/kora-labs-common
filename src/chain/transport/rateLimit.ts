@@ -17,17 +17,18 @@ const blockedUntilByKey = new Map<string, number>();
 
 const toMs = (seconds: number) => Math.max(0, Math.ceil(seconds * 1000));
 
-const parseSeconds = (raw: string | null | undefined): number | null => {
-    if (raw === null || raw === undefined || raw.trim() === '') return null;
-    const value = Number(raw.trim().replace(/s$/i, ''));
-    return Number.isFinite(value) ? value : null;
+const parseSeconds = (raw: unknown): number | null => {
+    if (typeof raw !== 'string' && typeof raw !== 'number') return null;
+    if (String(raw).trim() === '') return null;
+    const value = Number(String(raw).trim().replace(/s$/i, ''));
+    return Number.isFinite(value) && value >= 0 ? value : null;
 };
 
 /** `Retry-After` is either delta-seconds or an HTTP date. */
 const parseRetryAfter = (raw: string | null | undefined, now: number): number | null => {
     const seconds = parseSeconds(raw);
     if (seconds !== null) return toMs(seconds);
-    if (!raw) return null;
+    if (!raw || Number.isFinite(Number(raw))) return null;
     const date = Date.parse(raw);
     return Number.isFinite(date) ? Math.max(0, date - now) : null;
 };
@@ -41,17 +42,26 @@ const parseReset = (raw: string | null | undefined, now: number): number | null 
     return toMs(value); // delta seconds
 };
 
+const retryInfoSeconds = (duration: unknown): number | null => {
+    if (typeof duration === 'string') return parseSeconds(duration);
+    if (!duration || typeof duration !== 'object' || Array.isArray(duration)) return null;
+    const { seconds = 0, nanos = 0 } = duration as { seconds?: unknown; nanos?: unknown };
+    const s = parseSeconds(seconds);
+    const n = parseSeconds(nanos);
+    return s !== null && n !== null && n < 1_000_000_000 ? s + n / 1_000_000_000 : null;
+};
+
 const bodyWaitMs = (body: unknown): number | null => {
     const waits: number[] = [];
     for (const entry of Array.isArray(body) ? body : [body]) {
         if (!entry || typeof entry !== 'object') continue;
         const record = entry as Record<string, any>;
-        const retryAfter = parseSeconds(record.retry_after === undefined ? undefined : String(record.retry_after));
+        const retryAfter = parseSeconds(record.retry_after);
         if (retryAfter !== null) waits.push(toMs(retryAfter));
         const details = record.error?.details;
         for (const detail of Array.isArray(details) ? details : []) {
             if (typeof detail?.['@type'] !== 'string' || !detail['@type'].endsWith('google.rpc.RetryInfo')) continue;
-            const delay = parseSeconds(detail.retryDelay);
+            const delay = retryInfoSeconds(detail.retryDelay);
             if (delay !== null) waits.push(toMs(delay));
         }
     }
@@ -66,10 +76,11 @@ const bodyWaitMs = (body: unknown): number | null => {
 export const statedWaitMs = (headers: HeaderReader | undefined, body: unknown, now = Date.now(), status?: number): number | null => {
     const header = (name: string) => headers?.get(name) ?? null;
     const exhausted = status === 429 || header('x-ratelimit-remaining')?.trim() === '0' || header('ratelimit-remaining')?.trim() === '0';
-    const resetApplies = status === undefined || exhausted;
+    const resetApplies = status === undefined || status < 200 || status >= 300 || exhausted;
     const candidates = [
         parseRetryAfter(header('retry-after'), now),
         !resetApplies || parseSeconds(header('x-ratelimit-reset-after')) === null ? null : toMs(parseSeconds(header('x-ratelimit-reset-after'))!),
+        !resetApplies || parseSeconds(header('ratelimit-reset-after')) === null ? null : toMs(parseSeconds(header('ratelimit-reset-after'))!),
         !resetApplies || parseSeconds(header('ratelimit-reset')) === null ? null : toMs(parseSeconds(header('ratelimit-reset'))!),
         exhausted ? parseReset(header('x-ratelimit-reset'), now) : null,
         bodyWaitMs(body)
