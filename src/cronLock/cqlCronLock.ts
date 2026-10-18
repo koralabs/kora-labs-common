@@ -414,15 +414,9 @@ export const acquire = async (name: string, offline?: string | null, options: Ac
         const result = await acquireCoordinatedWithExecutor(executor, name, offline, topology, {
             leaseMs: options.leaseMs, ...(options.arbiter ? { arbiter: createCronArbiter() } : {})
         });
-        if (result.status === 'peerUnavailable') {
+        if (result.status === 'unavailable') {
             Logger.log({
-                message: `cron lock '${name}' SERIAL unavailable because the configured peer quorum is unavailable: ${result.message}`,
-                event: 'cqlCronLock.acquire.peerUnavailable',
-                category: LogCategory.WARN
-            });
-        } else if (result.status === 'unavailable') {
-            Logger.log({
-                message: `cron lock '${name}' failed without a positively identified peer-unavailable response: ${result.message}`,
+                message: `cron lock '${name}' admission unavailable: ${result.message}`,
                 event: 'cqlCronLock.acquire.unavailable',
                 category: LogCategory.WARN
             });
