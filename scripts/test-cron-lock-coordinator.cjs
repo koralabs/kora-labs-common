@@ -6,7 +6,9 @@ const { Client, types } = require('cassandra-driver');
 const { createCqlExecutor } = require('../lib/cronLock/cqlClient');
 const { acquireWithExecutor, releaseWithExecutor } = require('../lib/cronLock/cqlCronLock');
 
-const ips = process.argv.slice(2);
+const args = process.argv.slice(2);
+const negativeControl = args.includes('--local-coordinator-negative-control');
+const ips = args.filter(arg => arg !== '--local-coordinator-negative-control');
 assert.equal(ips.length, 2, 'Supply two isolated lab container IPs');
 assert(ips.every(ip => /^172\.20\.0\.[23]$/.test(ip)), 'This test is restricted to the documented isolated Docker lab');
 const topologies = ips.map((ip, i) => ({
@@ -16,7 +18,11 @@ const topologies = ips.map((ip, i) => ({
 const setup = new Client({ contactPoints: [ips[0]], localDataCenter: 'kora-dc1' });
 let databaseErrors = 0;
 const executors = topologies.map(topology => {
-    const executor = createCqlExecutor(topology);
+    // Deliberately reproduce the served 6.19.1 producer without changing lock semantics/assertions.
+    const executor = negativeControl
+        ? new Client({ contactPoints: topology.contactPoints, localDataCenter: topology.localDataCenter,
+            socketOptions: { connectTimeout: 8000, readTimeout: 12000 } })
+        : createCqlExecutor(topology);
     return {
         shutdown: () => executor.shutdown(),
         async execute(...args) {

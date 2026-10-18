@@ -40,10 +40,33 @@ The script creates only a disposable lab keyspace/rows. Scylla 6.2 defaults new 
 
 Acceptance: 100 concurrent two-box rounds, exactly one acquired and one held per round, zero database exceptions (including those hidden by owner reconciliation), SERIAL reads from both callers use DC1, non-owner release preserves the winner, winner release removes the row. Offline caller stand-down and invalid offline input are also asserted.
 
-Negative control: substitute only the old `new Client({contactPoints,localDataCenter})` executor factory, retaining the actual acquire/release implementation and test. The test must fail. This proves the test observes the routing defect rather than merely exercising a fake lock. Restore the fixed factory and rerun.
+Negative control: run `node scripts/test-cron-lock-coordinator.cjs 172.20.0.2 172.20.0.3 --local-coordinator-negative-control`. This substitutes only the actually served old `new Client({contactPoints,localDataCenter,socketOptions})` executor factory, retaining the actual acquire/release implementation and every assertion. The test must fail. This proves the test observes the routing defect rather than merely exercising a fake lock. Run again without the flag to validate the fixed factory.
 
 Also stop each LAB peer in turn: an all-online acquisition must never return acquired without cross-DC quorum; an explicitly declared sole-online caller must still use its own DC. Never trigger application mint/refund jobs to test this.
 
+## Live incident evidence: 2026-10-18
+
+Read-only inspection of both mainnet HAL `0.0.135682591` and minting `0.0.11953692` images found application common **6.19.1**, not the locally repaired 6.20.3. The separate bridge's common 6.15.3 is not the application package. The HAL application bundle `function/lambda_handler-BcthHYIj.js` has SHA256 `7b7c177ff3e3bb68b55b8b3cec8bf0153c483cb888320788c58da2e1dfc4319a` and contains driver 4.10.0 metadata and the old `getClient` constructing only local contact points, local DC and 8000/12000 ms socket timeouts. Minting's `function/deploy-wi7Kdwxq.js` bundle has SHA256 `8e10fd9568a8d5c9ad211fec3dd6f8b17ddc2b9d54d6fa0c7be9b07df065fed0` and driver 4.9.0 metadata; its producer likewise uses the local client without a SERIAL profile. The local regression uses installed driver 4.10.0, matching HAL; do not misreport minting's older bundled driver as 4.10.0. Actual environment values on both boxes match topology: SFO `100.124.13.105:9042` / `kora-dc1`; RDM `100.94.227.122:9042` / `kora-dc2`.
+
+Both nodes report the same schema version `31c1b326-7674-11f1-bb89-514c8c66b78a`; `kora_locks` has NTS RF1 in each DC, and `cron_lock` is a vnode table. Runtime REST configuration on both: contention 1000 ms, write 2000 ms, read 5000 ms, range/request 10000 ms, cross-node timeout false. Independent infrastructure evidence found direct approximately 55 ms WAN RTT, no current packet loss, synchronized sub-millisecond clocks and no resource pressure. Increasing timeouts or changing consistency is not the correction.
+
+The observed causal chain is:
+
+```text
+served 6.19.1 topology-local coordinators on opposing DCs
+  -> simultaneous same-partition Paxos leaders across the WAN
+  -> partial acceptances and ambiguous SERIAL write outcomes
+  -> SERIAL owner reconciliation can itself contend and fail
+  -> token-conditional retraction can remain unknown
+  -> lease-expiry recovery, with protected work unavailable in the meantime
+```
+
+Lifetime uncertainty counters summed across shards were SFO 3633 and RDM 9990. A subsequent passive snapshot at 02:18 UTC showed SFO +2 uncertainty, +1 write timeout, +1 read timeout; RDM +0 uncertainty and +1 write timeout relative to the earlier snapshot. These are cluster-wide counters, not per-application attribution or an incident-specific loss measurement. Raw read-only evidence is retained locally under `tmp/live-lock/`; infrastructure has independent OS/WAN evidence. No SERIAL read or LWT was issued against production lock rows: schema/system reads, runtime configuration, metrics and image inspection only.
+
+The isolated two-DC Scylla 6.2 regression at 25 ms egress delay on each LAB node reproduced the exact production failure with the old factory at round 6: one acquired, the other unavailable with SERIAL 1/2, owner SERIAL read 1/2 and failed retraction. Without the negative-control flag the repaired factory passed all 100 rounds: 100 acquired, 100 held, 100 non-owner releases preserving the winner, 100 winning releases, zero database errors including recovered exceptions, and only DC1 coordination. With each LAB peer stopped in turn, all-online acquisition remained fail-closed (DC1 survivor: peerUnavailable; DC2 survivor: unavailable), while explicitly declared solo mode acquired and released through the surviving local DC. Both edge tests exited 0. The application source fix already exists in 6.20.3; this incident follow-through adds reproducible proof, not another timeout/fallback patch or package/API change.
+
+Independent HAL owner image inspection found both preview instances on common 6.20.2 with DC1 routing and both preprod instances still on 6.19.1 with local routing. Natural preview windows at 02:12–02:15 alternated completion between the boxes while the other skipped. This establishes admission on both nodes, not refund success. Mainnet remains uncorrected until new served artifacts are independently confirmed.
+
 ## Landing and serving acceptance
 
-This is a package change, not a deployment. Publish the reviewed version and update both minting and HAL consumers/lockfiles on their own approved branches. Do not infer serving from the package version alone. Inspect both deployed artifacts' lock client and collect same-window database metrics and protected cron outcomes on BOTH boxes. Require bounded acquisition, safe losers, protected work, release and backlog-age evidence. Observe repeated timer collisions, not just an idle minute. Old ambiguity and lease-expiry paths remain safety/recovery mechanisms, not proof of repair.
+This is a package change, not a deployment. Update both minting and HAL consumers/lockfiles on their own approved branches using the actual 6.20.3 tarball already supplied, with its real integrity and tracked vendor file accepted by the canonical build validator. Publication is not authorized for this incident; a missing registry version is not permission to fabricate lockfile metadata or bypass the validator. Land the canonical vendor-validation support first, pin its tested immutable revision in consumer workflows, then use the ordinary GitHub Actions preprod path. Do not infer serving from the package version alone. Inspect both deployed artifacts' lock client and collect same-window database metrics and protected cron outcomes on BOTH boxes. Require bounded acquisition, safe losers, protected work, release and backlog-age evidence. Observe repeated timer collisions, not just an idle minute. Old ambiguity and lease-expiry paths remain safety/recovery mechanisms, not proof of repair.
