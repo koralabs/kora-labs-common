@@ -169,7 +169,8 @@ export const isWriteTimeoutError = (error: unknown): boolean =>
  * the driver's readTimeout ("The host … did not reply before timeout") — either way it may have committed.
  */
 export const isUnknownOutcomeError = (error: unknown): boolean =>
-    isWriteTimeoutError(error) || error instanceof errors.OperationTimedOutError;
+    isWriteTimeoutError(error) || error instanceof errors.OperationTimedOutError ||
+    (error instanceof errors.NoHostAvailableError && Object.values(error.innerErrors ?? {}).some(isUnknownOutcomeError));
 
 /**
  * The directly testable LWT operation. Each invocation owns a unique token, so
@@ -189,6 +190,7 @@ export const acquireWithExecutor = async (
     const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
     const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
     const key = scopeName(name, topology);
+    let refreshing = false;
 
     try {
         const result = await executor.execute(
@@ -200,6 +202,7 @@ export const acquireWithExecutor = async (
         if (row?.['[applied]'] === true) return { status: 'acquired', token };
         if (row?.owner !== token) return { status: 'held' };
 
+        refreshing = true;
         const refresh = await executor.execute(
             `UPDATE ${KEYSPACE}.${LOCK_TABLE} USING TTL ${leaseSeconds(lease)} SET owner = ?, acquired_at = ? WHERE name = ? IF owner = ?`,
             [token, new Date(), key, token],
@@ -209,16 +212,20 @@ export const acquireWithExecutor = async (
         return refreshRow?.['[applied]'] === true ? { status: 'acquired', token } : { status: 'held' };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (mode === 'serial' && isPeerUnavailableError(error)) {
+        if (mode === 'serial' && !refreshing && isPeerUnavailableError(error)) {
             return { status: 'peerUnavailable', token, message };
         }
-        if (isUnknownOutcomeError(error)) {
+        if (refreshing || isUnknownOutcomeError(error)) {
             // The LWT timed out: it may have been applied WITH OUR TOKEN, in which case nobody (not even
             // us) could run until the lease expired. A read at the same serial consistency completes any
             // in-flight Paxos round, so it tells us the real owner.
             const read = await readOwner(executor, key, serialConsistency);
-            if (read.owner === token) return { status: 'acquired', token };
-            if (read.owner) return { status: 'held' };
+            if (read.owner === token && !refreshing) return { status: 'acquired', token };
+            if (read.owner && read.owner !== token) return { status: 'held' };
+            if (refreshing && read.owner === token) {
+                const retracted = await deleteIfOwner(executor, key, token, serialConsistency, consistency);
+                return { status: 'unavailable', message: `${message}; lease renewal unconfirmed; ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
+            }
             if (read.error) {
                 // Still unknown and we will not run: retract our possibly-applied proposal so it cannot
                 // block every box for the whole lease. Conditional on our token, so it never frees another's lock.
@@ -306,7 +313,7 @@ export const releaseWithExecutor = async (
     topology: CronLockTopology
 ): Promise<ReleaseResult> => {
     const mode = resolveMode(parseOffline(offline), topology);
-    if (mode === 'standDown') return { status: 'released' };
+    if (mode === 'standDown') return { status: 'unknown', message: 'This box is declared offline; release was not attempted' };
     const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
     const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
     const key = scopeName(name, topology);

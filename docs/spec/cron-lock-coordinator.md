@@ -12,6 +12,16 @@ The enabling condition was default local-DC driver routing combined with cross-D
 
 If that coordinator is unreachable, acquisition remains fail closed; there is no added alternate coordinator or local-ownership fallback. An unreachable primary may now produce a driver connection error instead of the definite UNAVAILABLE previously received from the remaining local coordinator. Existing caller fallback eligibility can therefore become narrower. Declared solo mode remains local. This availability tradeoff requires review; it never authorizes weakening ownership.
 
+## Response lifecycle follow-up (6.20.3)
+
+Driver `NoHostAvailableError` can wrap an ambiguous timeout; any nested timeout now triggers serial owner reconciliation, never solo fallback. An UNAVAILABLE during renewal is not proof that the preceding acquisition was unaccepted. Failed renewal cannot establish a fresh lease by reading the old token: the invocation retracts only its own token and returns unavailable instead of running under an unconfirmed lease. An offline caller still does no database work on release, but reports unknown rather than falsely confirming release. These correct classification/ownership bugs; TTL remains recovery only. Shared DC1 coordinator routing and token-conditional deletes are preserved.
+
+HTTP body-read failures retain the observed response status on the original error, so consumers do not mistake an observed provider failure for an unobserved transport failure. Admission and body observation still use the shared lifecycle introduced in 6.20.2.
+
+Consumer integration: update `@koralabs/kora-labs-common` to 6.20.3 in minting.handle.me, hal-minting-engine and any JSON/raw-response transport consumers (including handle.me), updating their lockfiles together. No API signature changes. Publishing and consumer integration are intentionally deferred to the parent; this package task performs neither deployment nor publication.
+
+Focused validation: `npm test -- --runInBand src/cronLock src/chain/transport` and `npm run build`. Renewal regression was run with the refreshing guard removed and failed (`peerUnavailable` instead of `unavailable`), then restored. No full suite is run here; parent integration owns it. Disposable two-box database acceptance below remains a separate integration gate, not something the in-memory behavior tests claim to prove.
+
 ## Local integration test only
 
 Never run this in GitHub Actions or against production. Use two disposable `scylladb/scylla:6.2` containers on an isolated Docker network with subnet `172.20.0.0/16` and IPs `172.20.0.2` / `172.20.0.3`, one CPU and 1 GiB each. Mount `cassandra-rackdc.properties` with `dc=kora-dc1` / `dc=kora-dc2`, respectively. Use `--endpoint-snitch GossipingPropertyFileSnitch`, seed the second from the first, and wait until BOTH are UN before adding delay. Delay during bootstrap makes repair unnecessarily slow.
