@@ -1,5 +1,5 @@
 import { Client, types } from 'cassandra-driver';
-import { createCqlExecutor } from './cqlClient';
+import { createCqlExecutor, LOCAL_COORDINATOR_PROFILE } from './cqlClient';
 
 const topology = {
     network: 'preview', nodeCode: 'rdm', mintNodes: ['sfo', 'rdm'],
@@ -15,7 +15,11 @@ it.each([
     ['INSERT', { serialConsistency: types.consistencies.serial, consistency: types.consistencies.quorum }, 'cron-lock-serial'],
     ['SELECT', { consistency: types.consistencies.serial }, 'cron-lock-serial'],
     ['DELETE', { serialConsistency: types.consistencies.localSerial, consistency: types.consistencies.localQuorum }, undefined],
-    ['SELECT table_name', { consistency: types.consistencies.localOne }, undefined]
+    ['SELECT table_name', { consistency: types.consistencies.localOne }, undefined],
+    ['LOCAL PROOF INSERT', { serialConsistency: types.consistencies.serial, consistency: types.consistencies.quorum,
+        executionProfile: LOCAL_COORDINATOR_PROFILE }, LOCAL_COORDINATOR_PROFILE],
+    ['LOCAL PROOF SELECT', { consistency: types.consistencies.serial,
+        executionProfile: LOCAL_COORDINATOR_PROFILE }, LOCAL_COORDINATOR_PROFILE]
 ])('preserves the %s network contract', async (query, options, executionProfile) => {
     const reply = { rows: [{ owner: 'rdm:invocation', '[applied]': true }] };
     const execute = jest.spyOn(Client.prototype, 'execute').mockResolvedValue(reply as never);

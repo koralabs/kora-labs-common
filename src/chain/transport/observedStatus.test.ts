@@ -14,6 +14,16 @@ it('keeps actual HTTP status separate from payload status and mutable public dia
     Object.assign(caught as object, { httpStatus: 404 });
     expect(observedProviderHttpStatus(caught)).toBe(200);
 });
+// Invariant: a failed body retains actual response provenance without changing error identity.
+// Failure caught: callers lost the observed HTTP status when response.text rejected.
+// Negative control: removing body-failure recording leaves the observed status undefined.
+it.each([404, 503])('retains observed %s when body consumption fails', async (status) => {
+    const failure = new Error('body unavailable');
+    await expect(fetchProviderJson({ provider: 'Koios', url: 'https://offline', maxRetries: 0,
+        fetcher: async () => ({ status, ok: false, statusText: 'failed', text: async () => { throw failure; } })
+    })).rejects.toBe(failure);
+    expect(observedProviderHttpStatus(failure)).toBe(status);
+});
 it('does not attribute an observed response to a synthetic provider-not-found error', () => {
     const error = providerNotFoundError('Blockfrost', 'offline asset');
     expect(error).toMatchObject({ status: 404 });

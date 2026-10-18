@@ -10,18 +10,25 @@
  * Operators declare unavailable boxes through the offline set:
  *  - all boxes online: SERIAL / QUORUM;
  *  - this box offline: stand down;
- *  - this box is the only declared-online box: LOCAL_SERIAL / LOCAL_QUORUM;
- *  - an undeclared peer outage: 'peerUnavailable'. Callers whose job is safe on one
- *    box (on-chain/idempotent) may take a DC-local fallback, and only after this
- *    definite CQL UNAVAILABLE response (never after a timeout or unknown failure).
+ *  - this box is the only declared-online box: explicit LOCAL_SERIAL / LOCAL_QUORUM;
+ *  - opted-in lock names require an arbiter grant AND a token-owned local CQL row for
+ *    either declared or automatic solo operation; they never use an independent local mutex.
+ *  - automatic eligibility requires definite SERIAL UNAVAILABLE, or unreachable DC1 confirmed
+ *    by a local coordinator's SERIAL UNAVAILABLE. Ambiguous outcomes never authorize solo.
+ *
+ * The Durable Object drains 300s for every new episode, grants 600s, and retires old tokens.
+ * A run starts only with >300s grant lifetime remaining (the Fn hard-kill maximum). A healed
+ * SERIAL read retires the grant without deleting its local token row, preserving in-flight work.
  *
  * The row TTL recovers crashed holders. Unique per-invocation owner tokens prevent
  * overlapping ticks on one box from mistaking node identity for lock ownership.
  */
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { errors, types } from 'cassandra-driver';
 import { LogCategory, Logger } from '../logger';
-import { createCqlExecutor } from './cqlClient';
+import { createCqlExecutor, LOCAL_COORDINATOR_PROFILE } from './cqlClient';
+import { arbiterOwner, ARBITER_LEASE_MS, createCronArbiter, CronArbiter, LastNormalSuccess, MAX_SOLO_RUN_MS } from './arbiter';
 
 const KEYSPACE = 'kora_locks';
 const LOCK_TABLE = 'cron_lock';
@@ -41,9 +48,9 @@ export interface CqlExecutor {
 
 export type AcquireResult =
     | { status: 'acquired'; token: string }
-    | { status: 'held' }
+    | { status: 'held'; owner?: string }
     | { status: 'peerUnavailable'; token: string; message: string }
-    | { status: 'unavailable'; message: string };
+    | { status: 'unavailable'; message: string; coordinatorUnreachable?: true };
 
 const required = (env: NodeJS.ProcessEnv, name: string): string => {
     const value = env[name]?.trim();
@@ -148,7 +155,8 @@ export const resolveMode = (offline: string[], topology: CronLockTopology): Mode
 const createToken = (topology: CronLockTopology): string => `${topology.nodeCode}:${randomUUID()}`;
 
 /**
- * Only an UNAVAILABLE response proves that no SERIAL proposal was accepted. The driver's default retry
+ * An UNAVAILABLE response proves this proposal was not accepted, NOT that the other DC cannot run.
+ * Only an arbiter grant plus the local token row authorizes automatic solo. The driver's default retry
  * policy retries UNAVAILABLE on the next host and then throws NoHostAvailableError wrapping each host's
  * error, so that counts only when every host tried answered UNAVAILABLE.
  */
@@ -169,7 +177,8 @@ export const isWriteTimeoutError = (error: unknown): boolean =>
  * the driver's readTimeout ("The host … did not reply before timeout") — either way it may have committed.
  */
 export const isUnknownOutcomeError = (error: unknown): boolean =>
-    isWriteTimeoutError(error) || error instanceof errors.OperationTimedOutError;
+    isWriteTimeoutError(error) || error instanceof errors.OperationTimedOutError ||
+    (error instanceof errors.NoHostAvailableError && Object.values(error.innerErrors ?? {}).some(isUnknownOutcomeError));
 
 /**
  * The directly testable LWT operation. Each invocation owns a unique token, so
@@ -189,6 +198,7 @@ export const acquireWithExecutor = async (
     const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
     const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
     const key = scopeName(name, topology);
+    let refreshing = false;
 
     try {
         const result = await executor.execute(
@@ -198,8 +208,10 @@ export const acquireWithExecutor = async (
         );
         const row = result.rows[0] as Record<string, unknown> | undefined;
         if (row?.['[applied]'] === true) return { status: 'acquired', token };
-        if (row?.owner !== token) return { status: 'held' };
+        if (row?.owner !== token) return arbiterOwner(row?.owner)
+            ? { status: 'held', owner: String(row?.owner) } : { status: 'held' };
 
+        refreshing = true;
         const refresh = await executor.execute(
             `UPDATE ${KEYSPACE}.${LOCK_TABLE} USING TTL ${leaseSeconds(lease)} SET owner = ?, acquired_at = ? WHERE name = ? IF owner = ?`,
             [token, new Date(), key, token],
@@ -209,16 +221,21 @@ export const acquireWithExecutor = async (
         return refreshRow?.['[applied]'] === true ? { status: 'acquired', token } : { status: 'held' };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (mode === 'serial' && isPeerUnavailableError(error)) {
+        if (mode === 'serial' && !refreshing && isPeerUnavailableError(error)) {
             return { status: 'peerUnavailable', token, message };
         }
-        if (isUnknownOutcomeError(error)) {
+        if (refreshing || isUnknownOutcomeError(error)) {
             // The LWT timed out: it may have been applied WITH OUR TOKEN, in which case nobody (not even
             // us) could run until the lease expired. A read at the same serial consistency completes any
             // in-flight Paxos round, so it tells us the real owner.
             const read = await readOwner(executor, key, serialConsistency);
-            if (read.owner === token) return { status: 'acquired', token };
-            if (read.owner) return { status: 'held' };
+            if (read.owner === token && !refreshing) return { status: 'acquired', token };
+            if (read.owner && read.owner !== token) return arbiterOwner(read.owner)
+                ? { status: 'held', owner: read.owner } : { status: 'held' };
+            if (refreshing && read.owner === token) {
+                const retracted = await deleteIfOwner(executor, key, token, serialConsistency, consistency);
+                return { status: 'unavailable', message: `${message}; lease renewal unconfirmed; ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
+            }
             if (read.error) {
                 // Still unknown and we will not run: retract our possibly-applied proposal so it cannot
                 // block every box for the whole lease. Conditional on our token, so it never frees another's lock.
@@ -226,8 +243,21 @@ export const acquireWithExecutor = async (
                 return { status: 'unavailable', message: `${message}; owner read failed (${read.error}); ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
             }
         }
-        return { status: 'unavailable', message };
+        return { status: 'unavailable', message, ...(isCoordinatorUnreachableError(error) ? { coordinatorUnreachable: true as const } : {}) };
     }
+};
+
+/** No coordinator accepted a query; never reinterpret an ambiguous driver timeout as peer loss. */
+export const isCoordinatorUnreachableError = (error: unknown): boolean => {
+    if (!(error instanceof errors.NoHostAvailableError) || isUnknownOutcomeError(error)) return false;
+    return Object.values(error.innerErrors ?? {}).every((inner: unknown) => {
+        // Driver 4.9/4.10 RequestHandler/PrepareHandler use this literal, not an Error, when
+        // the pinned host is marked DOWN. No query was dispatched to that host.
+        if (inner === 'Host considered as DOWN') return true;
+        if (inner instanceof errors.ResponseError || inner instanceof errors.OperationTimedOutError) return false;
+        const code = (inner as NodeJS.ErrnoException)?.code;
+        return ['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EPIPE', 'ECONNRESET'].includes(code ?? '');
+    });
 };
 
 /** The lock's owner as a linearizable (serial) read sees it. */
@@ -262,19 +292,131 @@ export const acquireOnExecutor = async (
     return acquireWithExecutor(executor, name, offline, topology, undefined, lease);
 };
 
-export const acquire = async (name: string, offline?: string | null, options: { leaseMs?: number } = {}): Promise<AcquireResult> => {
+export interface AcquireOptions {
+    leaseMs?: number;
+    /** Applies to every caller of this lock name, including non-cron callers. Fn lifetime must be <=300s. */
+    arbiter?: boolean;
+}
+
+const evidenceKey = (name: string, topology: CronLockTopology): string => `${topology.network}:!normal-success:${name}`;
+
+const readNormalSuccess = async (executor: CqlExecutor, name: string, topology: CronLockTopology): Promise<{
+    vector: LastNormalSuccess; version: bigint;
+}> => {
+    const result = await executor.execute(`SELECT owner, writetime(owner) AS version FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`,
+        [evidenceKey(name, topology)], { prepare: true, consistency: types.consistencies.localOne });
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return { vector: { sfo: 0, rdm: 0 }, version: BigInt(0) };
+    const vector = typeof row.owner === 'string' ? JSON.parse(row.owner) : null;
+    const version = String(row.version);
+    if (!vector || Object.keys(vector).sort().join(',') !== 'rdm,sfo' ||
+        ![vector.sfo, vector.rdm].every(value => Number.isSafeInteger(value) && value >= 0) || !/^\d+$/.test(version)) {
+        throw new Error('Invalid durable normal-success evidence');
+    }
+    return { vector, version: BigInt(version) };
+};
+
+/** Persist to BOTH replicas before work, so the opposite box can prove a heal after a cold start. */
+const recordNormalSuccess = async (executor: CqlExecutor, name: string, topology: CronLockTopology, wallNow: () => number): Promise<void> => {
+    const { vector, version } = await readNormalSuccess(executor, name, topology);
+    if (topology.nodeCode !== 'sfo' && topology.nodeCode !== 'rdm') throw new Error('Unsupported arbiter box identity');
+    const time = wallNow();
+    const next = Math.max(time, vector[topology.nodeCode] + 1);
+    if (!Number.isSafeInteger(next) || next < 0) throw new Error('Invalid normal-success clock');
+    vector[topology.nodeCode] = next;
+    // The payload has per-box clocks; the CQL LWW timestamp must ALSO advance across boxes whose
+    // clocks differ. Otherwise a behind-clock writer's newer causal evidence would be silently lost.
+    const micros = BigInt(time) * BigInt(1000);
+    const timestamp = types.Long.fromString((micros > version ? micros : version + BigInt(1)).toString());
+    await executor.execute(`INSERT INTO ${KEYSPACE}.${LOCK_TABLE} (name, owner) VALUES (?, ?) USING TIMESTAMP ?`,
+        [evidenceKey(name, topology), JSON.stringify(vector), timestamp], { prepare: true, consistency: types.consistencies.quorum });
+};
+
+/** Complete admission lifecycle; injected boundaries exercise the real CQL and HTTP behavior in the lab. */
+export const acquireCoordinatedWithExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology,
+    options: { leaseMs?: number; arbiter?: CronArbiter; now?: () => number; wallNow?: () => number } = {}
+): Promise<AcquireResult> => {
+    const now = options.now ?? (() => performance.now());
+    const mode = resolveMode(parseOffline(offline), topology);
+    if (mode === 'standDown') return { status: 'held' };
+    const normalToken = createToken(topology);
+    if (mode !== 'localSerial' || !options.arbiter) {
+        let normal = await acquireWithExecutor(executor, name, offline, topology, normalToken, options.leaseMs);
+        if (normal.status === 'unavailable' && normal.coordinatorUnreachable && topology.localDataCenter !== 'kora-dc1' && options.arbiter) {
+            // This is still SERIAL/QUORUM. Only a definite UNAVAILABLE from the local coordinator
+            // proves peer loss; arbitrary NoHostAvailable, timeouts and local failures never authorize solo.
+            try {
+                const probe = await executor.execute(`SELECT owner FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`,
+                    [scopeName(name, topology)], { prepare: true, consistency: types.consistencies.serial,
+                        executionProfile: LOCAL_COORDINATOR_PROFILE });
+                const owner = (probe.rows[0] as Record<string, unknown> | undefined)?.owner;
+                normal = typeof owner === 'string' ? { status: 'held', ...(arbiterOwner(owner) ? { owner } : {}) }
+                    : { status: 'unavailable', message: 'Pinned coordinator unreachable, but the local SERIAL read confirms a responsive peer quorum' };
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                normal = isPeerUnavailableError(error) ? { status: 'peerUnavailable', token: normalToken, message }
+                    : { status: 'unavailable', message };
+            }
+        }
+        if (normal.status === 'acquired' || normal.status === 'held') {
+            if (normal.status === 'acquired' && mode === 'serial') {
+                try { await recordNormalSuccess(executor, name, topology, options.wallNow ?? Date.now); }
+                catch (error) {
+                    await releaseWithExecutor(executor, name, normal.token, offline, topology);
+                    return { status: 'unavailable', message: `Normal-success evidence was not confirmed: ${error instanceof Error ? error.message : String(error)}` };
+                }
+            }
+            if (normal.status === 'held' && normal.owner && options.arbiter) {
+                // A SERIAL result proves the link healed. Retire the solo episode, NOT its CQL row:
+                // that token continues protecting any in-flight Fn until its conditional release/TTL.
+                await options.arbiter.request('release', { network: topology.network, name,
+                    ownerBox: arbiterOwner(normal.owner)!, token: normal.owner });
+            }
+            return normal;
+        }
+        if (normal.status !== 'peerUnavailable' || !options.arbiter) {
+            return normal.status === 'peerUnavailable' ? { status: 'unavailable', message: normal.message } : normal;
+        }
+    }
+    if (!options.arbiter) throw new Error('An arbiter is required for automatic solo admission');
+    const token = `${topology.nodeCode}:arbiter:${randomUUID()}`;
+    const { vector: lastNormalSuccess } = await readNormalSuccess(executor, name, topology);
+    const identity = { network: topology.network, name, ownerBox: topology.nodeCode, token, lastNormalSuccess };
+    const grant = await options.arbiter.request('acquire', identity);
+    if (grant.status !== 'granted') return { status: 'held' };
+    const localOffline = topology.mintNodes.filter(node => node !== topology.nodeCode).join(',');
+    const finishUnusedGrant = async (): Promise<void> => {
+        await options.arbiter!.request('release', identity);
+    };
+    if (grant.deadline - now() <= MAX_SOLO_RUN_MS) {
+        await finishUnusedGrant();
+        return { status: 'unavailable', message: 'Arbiter grant has insufficient remaining Fn lifetime' };
+    }
+    // Both locks are required. In particular this row prevents a healed SERIAL contender from
+    // starting while the solo Fn is alive; the arbiter alone cannot bridge the CQL handoff.
+    const local = await acquireWithExecutor(executor, name, localOffline, topology, token, ARBITER_LEASE_MS);
+    if (local.status === 'acquired' && grant.deadline - now() > MAX_SOLO_RUN_MS) return local;
+    if (local.status === 'acquired') await releaseWithExecutor(executor, name, token, localOffline, topology);
+    await finishUnusedGrant();
+    return local.status === 'held' ? { status: 'held' } : { status: 'unavailable', message: 'Arbiter-authorized local CQL acquisition failed or exceeded the Fn start budget' };
+};
+
+export const acquire = async (name: string, offline?: string | null, options: AcquireOptions = {}): Promise<AcquireResult> => {
     try {
         const topology = resolveTopology();
-        const result = await acquireOnExecutor(getClient(topology), name, offline, topology, options.leaseMs);
-        if (result.status === 'peerUnavailable') {
+        const executor = getClient(topology);
+        if (resolveMode(parseOffline(offline), topology) === 'standDown') return { status: 'held' };
+        await ensureSchema(executor);
+        const result = await acquireCoordinatedWithExecutor(executor, name, offline, topology, {
+            leaseMs: options.leaseMs, ...(options.arbiter ? { arbiter: createCronArbiter() } : {})
+        });
+        if (result.status === 'unavailable') {
             Logger.log({
-                message: `cron lock '${name}' SERIAL unavailable because the configured peer quorum is unavailable: ${result.message}`,
-                event: 'cqlCronLock.acquire.peerUnavailable',
-                category: LogCategory.WARN
-            });
-        } else if (result.status === 'unavailable') {
-            Logger.log({
-                message: `cron lock '${name}' failed without a positively identified peer-unavailable response: ${result.message}`,
+                message: `cron lock '${name}' admission unavailable: ${result.message}`,
                 event: 'cqlCronLock.acquire.unavailable',
                 category: LogCategory.WARN
             });
@@ -306,7 +448,7 @@ export const releaseWithExecutor = async (
     topology: CronLockTopology
 ): Promise<ReleaseResult> => {
     const mode = resolveMode(parseOffline(offline), topology);
-    if (mode === 'standDown') return { status: 'released' };
+    if (mode === 'standDown') return { status: 'unknown', message: 'This box is declared offline; release was not attempted' };
     const serialConsistency = mode === 'localSerial' ? types.consistencies.localSerial : types.consistencies.serial;
     const consistency = mode === 'localSerial' ? types.consistencies.localQuorum : types.consistencies.quorum;
     const key = scopeName(name, topology);
@@ -325,10 +467,30 @@ export const releaseWithExecutor = async (
     }
 };
 
+export const releaseCoordinatedWithExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    token: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology,
+    arbiter?: CronArbiter
+): Promise<ReleaseResult> => {
+    const ownerBox = arbiterOwner(token);
+    const standDown = resolveMode(parseOffline(offline), topology) === 'standDown';
+    const localOffline = ownerBox && !standDown ? topology.mintNodes.filter(node => node !== topology.nodeCode).join(',') : offline;
+    const result = await releaseWithExecutor(executor, name, token, localOffline, topology);
+    if (ownerBox) {
+        if (!arbiter) throw new Error('Arbiter token release requires the arbiter client');
+        await arbiter.request('release', { network: topology.network, name, ownerBox, token });
+    }
+    return result;
+};
+
 export const release = async (name: string, token: string, offline?: string | null): Promise<void> => {
     try {
         const topology = resolveTopology();
-        const result = await releaseWithExecutor(getClient(topology), name, token, offline, topology);
+        const result = await releaseCoordinatedWithExecutor(getClient(topology), name, token, offline, topology,
+            arbiterOwner(token) ? createCronArbiter() : undefined);
         if (result.status === 'unknown') {
             Logger.log({
                 message: `cron lock '${name}' release failed; if the row survived, '${name}' idles on every box until its lease expires: ${result.message}`,

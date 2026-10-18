@@ -281,7 +281,8 @@ export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
                 try {
                     text = await readText(response);
                 } catch (error) {
-                    // Keep the original response/error for each caller's existing body contract.
+                    // Body failure does not erase the response we already observed.
+                    if (typeof error === 'object' && error !== null) observedResponseStatuses.set(error, response.status);
                     return { response, body: { ok: false, error }, statedWait: headerWait !== null };
                 }
                 const bodyAt = Date.now();

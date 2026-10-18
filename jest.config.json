@@ -1,5 +1,6 @@
 {
     "testEnvironment": "node",
+    "setupFiles": ["<rootDir>/tests/network-guard.cjs"],
     "preset": "ts-jest/presets/js-with-ts",
     "testMatch": ["**/*.test.ts"],
     "moduleFileExtensions": ["js", "ts"],

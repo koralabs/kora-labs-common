@@ -229,6 +229,41 @@ describe('CQL cron-lock acquisition', () => {
     });
 });
 
+// Invariant: a failed renewal cannot authorize work with an old lease or solo fallback.
+// Failure caught: UNAVAILABLE from the second statement was treated as an unaccepted acquisition.
+// Negative control: removing the refreshing guard returns peerUnavailable instead of unavailable.
+it('retracts its token when renewal is unavailable, without authorizing fallback', async () => {
+    const rows = new Map([['preview:lock', 'sfo:existing']]);
+    const executor: CqlExecutor = { async execute(query, params = []) {
+        if (query.startsWith('INSERT')) return { rows: [{ '[applied]': false, owner: rows.get('preview:lock') }] };
+        if (query.startsWith('UPDATE')) throw responseError(types.responseErrorCodes.unavailableException);
+        if (query.startsWith('SELECT')) return { rows: [{ owner: rows.get('preview:lock') }] };
+        if (query.startsWith('DELETE')) {
+            if (rows.get(String(params[0])) === params[1]) rows.delete(String(params[0]));
+            return { rows: [{ '[applied]': true }] };
+        }
+        throw new Error(query);
+    } };
+    const result = await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:existing');
+    assert.equal(result.status, 'unavailable');
+    assert.equal(rows.size, 0);
+});
+
+// Invariant: driver aggregation cannot hide a possibly committed proposal.
+// Failure caught: a wrapped timeout left our own committed row idle for its entire lease.
+// Negative control: removing recursive timeout detection returns unavailable and leaves the row.
+it('reconciles an acquisition timeout wrapped by the driver', async () => {
+    const executor: CqlExecutor = { async execute(query) {
+        if (query.startsWith('INSERT')) throw new errors.NoHostAvailableError({
+            'host:9042': new errors.OperationTimedOutError('reply lost')
+        });
+        if (query.startsWith('SELECT')) return { rows: [{ owner: 'sfo:committed' }] };
+        throw new Error(query);
+    } };
+    assert.deepEqual(await acquireWithExecutor(executor, 'lock', 'none', topology, 'sfo:committed'),
+        { status: 'acquired', token: 'sfo:committed' });
+});
+
 describe('CQL cron-lock release', () => {
     /** kora_locks.cron_lock with LWT semantics, whose DELETEs fail per `deleteFailures` (after or before committing). */
     const lockTable = (deleteFailures: Array<'appliedThenTimeout' | 'timeout'>, readFails = false) => {
@@ -308,7 +343,7 @@ describe('CQL cron-lock release', () => {
     it('stands down without touching the table on a box declared offline', async () => {
         const table = lockTable([]);
         table.rows.set('preview:lock', 'sfo:me');
-        assert.deepEqual(await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'sfo', topology), { status: 'released' });
+        assert.deepEqual(await releaseWithExecutor(table.executor, 'lock', 'sfo:me', 'sfo', topology), { status: 'unknown', message: 'This box is declared offline; release was not attempted' });
         assert.equal(table.deletes(), 0);
     });
 });

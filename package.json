@@ -1,6 +1,6 @@
 {
     "name": "@koralabs/kora-labs-common",
-    "version": "6.20.2",
+    "version": "6.21.0",
     "description": "Kora Labs Common Utilities",
     "main": "index.js",
     "types": "index.d.ts",
@@ -39,6 +39,7 @@
     "devDependencies": {
         "@aiken-lang/merkle-patricia-forestry": "^1.2.0",
         "@aws-sdk/client-dynamodb": "^3.549.0",
+        "@aws-sdk/client-s3": "3.1003.0",
         "@aws-sdk/lib-dynamodb": "^3.549.0",
         "@cardano-sdk/core": "^0.47.0",
         "@cardano-sdk/crypto": "^0.4.7",
