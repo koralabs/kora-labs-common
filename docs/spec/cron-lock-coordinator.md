@@ -2,7 +2,23 @@
 
 [Modules](./modules-and-data.md#cron-lock-coordinator-routing) · [PRD](../product/prd.md#safety-and-policy-utilities) · [Documentation](../index.md)
 
-## Failure and correction
+## Current contract (6.21.0)
+
+Normal acquisition stays DC1-pinned SERIAL/QUORUM, with no arbiter calls. Every caller of an opted-in lock name uses `acquire(name, offline, { arbiter: true })`, including Mint wallet rebalance; a lock name is not safe merely because one caller spends a mint root. HAL does not opt into automatic solo. The operator offline set is validated unchanged: this box stands down; explicitly sole-online non-opted-in locks retain operator-authorized LOCAL_SERIAL, whereas opted-in locks still require the arbiter.
+
+Automatic solo eligibility requires definite SERIAL UNAVAILABLE. When RDM cannot reach the pinned DC1 coordinator, a local-coordinator attempt at **SERIAL/QUORUM**, never downgraded consistency, must return definite UNAVAILABLE. Timeouts, unknown outcomes, malformed topology and unrelated failures remain unavailable. Public acquisition no longer hands an uncoordinated peerUnavailable branch to consumers.
+
+The signed Worker endpoint is `KORA_CRON_ARBITER_URL` (default `https://kora-cron-arbiter.jlanderson.workers.dev`), with per-network box SOPS `KORA_CRON_ARBITER_HMAC_SECRET`. One SQLite Durable Object per `(network,name)` implements POST `/v1/cron-lock/{acquire|renew|release}`. Exact JSON fields: `network,name,ownerBox,token,leaseMs:600000,maxRunMs:300000`. Header signature is HMAC-SHA256 over `${timestamp}.POST.${pathname}.${rawBody}`, using `x-kora-timestamp` and `x-kora-signature`. Decisions are granted/renewed/released/held/draining with DO-clock serverNow/expiresAt. Network selects a distinct secret and object namespace; preview credentials cannot arbitrate mainnet.
+
+Every new grant episode drains 300s, including after release/expiry, owner changes and heal/repartition. Contenders cannot reset an existing drain. New random `box:arbiter:uuid` tokens are never reused; only exact live-token renewal avoids a new drain. A draining decision returns held immediately: later natural requests revisit DO state, never a blocking 300s wait inside a 300s Fn. Retired tokens cannot reacquire.
+
+A DO grant is **necessary but insufficient**: the client must also acquire the same `kora_locks.cron_lock` row at LOCAL_SERIAL/LOCAL_QUORUM, with a 600s TTL and that exact token. Work starts only if more than the full 300s Fn hard-kill lifetime remains, conservatively subtracting the whole HTTP duration and subsequent CQL duration from the grant budget. Arbiter failure, ambiguity or rate limit stands down; stated rate limits are shared process-wide. No implicit retry or independent Alternator solo lock exists in this contract.
+
+Recovery is a two-authority handoff, not a free-standing DO lease: the local token row remains held while the solo Fn runs, so a healed global SERIAL contender must observe/complete the overlapping Paxos state and return held, not run concurrently. A healed SERIAL result containing an arbiter token retires that exact DO grant **without deleting its CQL row**. This ends the episode immediately while preserving in-flight work; repartition must drain anew. Exact-token release removes only that local CQL acquisition and retires its DO grant. Crashes retain the CQL TTL recovery. The lab must prove heal in both directions, crash, repeat partition and expiry-owner change before this contract is activated.
+
+The old independent DC-local Alternator mutex, its soloAlternator branch and old claims that UNAVAILABLE alone makes a lock safe are obsolete. Consumers retire old logical-expiry solo rows only through conditional normal application cleanup after protected acquisition; a live legacy row or uncertain cleanup declines work. No manual production row clearing is authorized.
+
+## Historical failure and correction
 
 Both application boxes submitted the same cron-lock partition to their own DC's coordinator. At WAN latency, their concurrent Paxos leaders could each obtain only a partial acceptance. Scylla 6.2.3 intentionally reports that ambiguity as SERIAL write timeout even when all replicas have answered. The counter `scylla_storage_proxy_coordinator_cas_write_timeout_due_to_uncertainty` measures that path. Its source is `service/storage_proxy.cc`, `accept_proposal`, at tag `scylla-6.2.3`; the same coordinator's `get_cas_lock` serializes same-partition proposals.
 

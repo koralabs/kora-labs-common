@@ -10,18 +10,25 @@
  * Operators declare unavailable boxes through the offline set:
  *  - all boxes online: SERIAL / QUORUM;
  *  - this box offline: stand down;
- *  - this box is the only declared-online box: LOCAL_SERIAL / LOCAL_QUORUM;
- *  - an undeclared peer outage: 'peerUnavailable'. Callers whose job is safe on one
- *    box (on-chain/idempotent) may take a DC-local fallback, and only after this
- *    definite CQL UNAVAILABLE response (never after a timeout or unknown failure).
+ *  - this box is the only declared-online box: explicit LOCAL_SERIAL / LOCAL_QUORUM;
+ *  - opted-in lock names require an arbiter grant AND a token-owned local CQL row for
+ *    either declared or automatic solo operation; they never use an independent local mutex.
+ *  - automatic eligibility requires definite SERIAL UNAVAILABLE, or unreachable DC1 confirmed
+ *    by a local coordinator's SERIAL UNAVAILABLE. Ambiguous outcomes never authorize solo.
+ *
+ * The Durable Object drains 300s for every new episode, grants 600s, and retires old tokens.
+ * A run starts only with >300s grant lifetime remaining (the Fn hard-kill maximum). A healed
+ * SERIAL read retires the grant without deleting its local token row, preserving in-flight work.
  *
  * The row TTL recovers crashed holders. Unique per-invocation owner tokens prevent
  * overlapping ticks on one box from mistaking node identity for lock ownership.
  */
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { errors, types } from 'cassandra-driver';
 import { LogCategory, Logger } from '../logger';
-import { createCqlExecutor } from './cqlClient';
+import { createCqlExecutor, LOCAL_COORDINATOR_PROFILE } from './cqlClient';
+import { arbiterOwner, ARBITER_LEASE_MS, createCronArbiter, CronArbiter, MAX_SOLO_RUN_MS } from './arbiter';
 
 const KEYSPACE = 'kora_locks';
 const LOCK_TABLE = 'cron_lock';
@@ -41,9 +48,9 @@ export interface CqlExecutor {
 
 export type AcquireResult =
     | { status: 'acquired'; token: string }
-    | { status: 'held' }
+    | { status: 'held'; owner?: string }
     | { status: 'peerUnavailable'; token: string; message: string }
-    | { status: 'unavailable'; message: string };
+    | { status: 'unavailable'; message: string; coordinatorUnreachable?: true };
 
 const required = (env: NodeJS.ProcessEnv, name: string): string => {
     const value = env[name]?.trim();
@@ -148,7 +155,8 @@ export const resolveMode = (offline: string[], topology: CronLockTopology): Mode
 const createToken = (topology: CronLockTopology): string => `${topology.nodeCode}:${randomUUID()}`;
 
 /**
- * Only an UNAVAILABLE response proves that no SERIAL proposal was accepted. The driver's default retry
+ * An UNAVAILABLE response proves this proposal was not accepted, NOT that the other DC cannot run.
+ * Only an arbiter grant plus the local token row authorizes automatic solo. The driver's default retry
  * policy retries UNAVAILABLE on the next host and then throws NoHostAvailableError wrapping each host's
  * error, so that counts only when every host tried answered UNAVAILABLE.
  */
@@ -200,7 +208,8 @@ export const acquireWithExecutor = async (
         );
         const row = result.rows[0] as Record<string, unknown> | undefined;
         if (row?.['[applied]'] === true) return { status: 'acquired', token };
-        if (row?.owner !== token) return { status: 'held' };
+        if (row?.owner !== token) return arbiterOwner(row?.owner)
+            ? { status: 'held', owner: String(row?.owner) } : { status: 'held' };
 
         refreshing = true;
         const refresh = await executor.execute(
@@ -221,7 +230,8 @@ export const acquireWithExecutor = async (
             // in-flight Paxos round, so it tells us the real owner.
             const read = await readOwner(executor, key, serialConsistency);
             if (read.owner === token && !refreshing) return { status: 'acquired', token };
-            if (read.owner && read.owner !== token) return { status: 'held' };
+            if (read.owner && read.owner !== token) return arbiterOwner(read.owner)
+                ? { status: 'held', owner: read.owner } : { status: 'held' };
             if (refreshing && read.owner === token) {
                 const retracted = await deleteIfOwner(executor, key, token, serialConsistency, consistency);
                 return { status: 'unavailable', message: `${message}; lease renewal unconfirmed; ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
@@ -233,8 +243,18 @@ export const acquireWithExecutor = async (
                 return { status: 'unavailable', message: `${message}; owner read failed (${read.error}); ${retracted ? 'retracted our proposal' : 'retract failed, the lease will reclaim it'}` };
             }
         }
-        return { status: 'unavailable', message };
+        return { status: 'unavailable', message, ...(isCoordinatorUnreachableError(error) ? { coordinatorUnreachable: true as const } : {}) };
     }
+};
+
+/** No coordinator accepted a query; never reinterpret an ambiguous driver timeout as peer loss. */
+export const isCoordinatorUnreachableError = (error: unknown): boolean => {
+    if (!(error instanceof errors.NoHostAvailableError) || isUnknownOutcomeError(error)) return false;
+    return Object.values(error.innerErrors ?? {}).every(inner => {
+        if (inner instanceof errors.ResponseError || inner instanceof errors.OperationTimedOutError) return false;
+        const code = (inner as NodeJS.ErrnoException)?.code;
+        return ['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EPIPE', 'ECONNRESET'].includes(code ?? '');
+    });
 };
 
 /** The lock's owner as a linearizable (serial) read sees it. */
@@ -269,10 +289,80 @@ export const acquireOnExecutor = async (
     return acquireWithExecutor(executor, name, offline, topology, undefined, lease);
 };
 
-export const acquire = async (name: string, offline?: string | null, options: { leaseMs?: number } = {}): Promise<AcquireResult> => {
+export interface AcquireOptions {
+    leaseMs?: number;
+    /** Applies to every caller of this lock name, including non-cron callers. Fn lifetime must be <=300s. */
+    arbiter?: boolean;
+}
+
+/** Complete admission lifecycle; injected boundaries exercise the real CQL and HTTP behavior in the lab. */
+export const acquireCoordinatedWithExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology,
+    options: { leaseMs?: number; arbiter?: CronArbiter; now?: () => number } = {}
+): Promise<AcquireResult> => {
+    const now = options.now ?? (() => performance.now());
+    const mode = resolveMode(parseOffline(offline), topology);
+    if (mode === 'standDown') return { status: 'held' };
+    const normalToken = createToken(topology);
+    if (mode !== 'localSerial' || !options.arbiter) {
+        let normal = await acquireWithExecutor(executor, name, offline, topology, normalToken, options.leaseMs);
+        if (normal.status === 'unavailable' && normal.coordinatorUnreachable && topology.localDataCenter !== 'kora-dc1' && options.arbiter) {
+            // This is still SERIAL/QUORUM. Only a definite UNAVAILABLE from the local coordinator
+            // proves peer loss; arbitrary NoHostAvailable, timeouts and local failures never authorize solo.
+            const localCoordinator: CqlExecutor = {
+                execute: (query, params, queryOptions) => executor.execute(query, params, {
+                    ...queryOptions, executionProfile: LOCAL_COORDINATOR_PROFILE
+                })
+            };
+            normal = await acquireWithExecutor(localCoordinator, name, offline, topology, normalToken, options.leaseMs);
+        }
+        if (normal.status === 'acquired' || normal.status === 'held') {
+            if (normal.status === 'held' && normal.owner && options.arbiter) {
+                // A SERIAL result proves the link healed. Retire the solo episode, NOT its CQL row:
+                // that token continues protecting any in-flight Fn until its conditional release/TTL.
+                await options.arbiter.request('release', { network: topology.network, name,
+                    ownerBox: arbiterOwner(normal.owner)!, token: normal.owner });
+            }
+            return normal;
+        }
+        if (normal.status !== 'peerUnavailable' || !options.arbiter) {
+            return normal.status === 'peerUnavailable' ? { status: 'unavailable', message: normal.message } : normal;
+        }
+    }
+    if (!options.arbiter) throw new Error('An arbiter is required for automatic solo admission');
+    const token = `${topology.nodeCode}:arbiter:${randomUUID()}`;
+    const identity = { network: topology.network, name, ownerBox: topology.nodeCode, token };
+    const grant = await options.arbiter.request('acquire', identity);
+    if (grant.status !== 'granted') return { status: 'held' };
+    const localOffline = topology.mintNodes.filter(node => node !== topology.nodeCode).join(',');
+    const finishUnusedGrant = async (): Promise<void> => {
+        await options.arbiter!.request('release', identity);
+    };
+    if (grant.deadline - now() <= MAX_SOLO_RUN_MS) {
+        await finishUnusedGrant();
+        return { status: 'unavailable', message: 'Arbiter grant has insufficient remaining Fn lifetime' };
+    }
+    // Both locks are required. In particular this row prevents a healed SERIAL contender from
+    // starting while the solo Fn is alive; the arbiter alone cannot bridge the CQL handoff.
+    const local = await acquireWithExecutor(executor, name, localOffline, topology, token, ARBITER_LEASE_MS);
+    if (local.status === 'acquired' && grant.deadline - now() > MAX_SOLO_RUN_MS) return local;
+    if (local.status === 'acquired') await releaseWithExecutor(executor, name, token, localOffline, topology);
+    await finishUnusedGrant();
+    return local.status === 'held' ? { status: 'held' } : { status: 'unavailable', message: 'Arbiter-authorized local CQL acquisition failed or exceeded the Fn start budget' };
+};
+
+export const acquire = async (name: string, offline?: string | null, options: AcquireOptions = {}): Promise<AcquireResult> => {
     try {
         const topology = resolveTopology();
-        const result = await acquireOnExecutor(getClient(topology), name, offline, topology, options.leaseMs);
+        const executor = getClient(topology);
+        if (resolveMode(parseOffline(offline), topology) === 'standDown') return { status: 'held' };
+        await ensureSchema(executor);
+        const result = await acquireCoordinatedWithExecutor(executor, name, offline, topology, {
+            leaseMs: options.leaseMs, ...(options.arbiter ? { arbiter: createCronArbiter() } : {})
+        });
         if (result.status === 'peerUnavailable') {
             Logger.log({
                 message: `cron lock '${name}' SERIAL unavailable because the configured peer quorum is unavailable: ${result.message}`,
@@ -335,7 +425,10 @@ export const releaseWithExecutor = async (
 export const release = async (name: string, token: string, offline?: string | null): Promise<void> => {
     try {
         const topology = resolveTopology();
-        const result = await releaseWithExecutor(getClient(topology), name, token, offline, topology);
+        const ownerBox = arbiterOwner(token);
+        const localOffline = ownerBox ? topology.mintNodes.filter(node => node !== topology.nodeCode).join(',') : offline;
+        const result = await releaseWithExecutor(getClient(topology), name, token, localOffline, topology);
+        if (ownerBox) await createCronArbiter().request('release', { network: topology.network, name, ownerBox, token });
         if (result.status === 'unknown') {
             Logger.log({
                 message: `cron lock '${name}' release failed; if the row survived, '${name}' idles on every box until its lease expires: ${result.message}`,

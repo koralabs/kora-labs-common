@@ -43,7 +43,7 @@ Multiple services in the Handles ecosystem need the same core behavior (address 
 ### Safety and Policy Utilities
 - Provide protected-word availability checks with number-replacement and phrase detection flows.
 - Keep known-contract registry mapping available for address-owner attribution.
-- Distributed cron locks must preserve cross-DC exclusive ownership and fail closed on uncertainty. Concurrent callers must share a coordinator rather than create competing Paxos leaders; declared-offline operation keeps its existing local consistency semantics.
+- Distributed cron locks must preserve cross-DC exclusive ownership and fail closed on uncertainty. Concurrent callers share the DC1 coordinator rather than create competing Paxos leaders. Opted-in lock names require an authenticated, network-scoped external arbiter AND their local token-owned CQL row during outages, including every caller such as wallet rebalance. Every new solo episode drains the 300s maximum Fn lifetime; grant expiry, release, recovery and repeated partition must not overlap holders. Normal operation has no arbiter dependency. Operator offline stand-down remains authoritative; opted-in sole-online operation is also arbiter-authorized. See the [handoff contract](../spec/cron-lock-coordinator.md#current-contract-6210).
 
 ### Shared Live Browser Test Harness
 - Share live CIP-30 suite configuration, preflight, proof gates and evidence through the testing subpaths.
