@@ -250,7 +250,10 @@ export const acquireWithExecutor = async (
 /** No coordinator accepted a query; never reinterpret an ambiguous driver timeout as peer loss. */
 export const isCoordinatorUnreachableError = (error: unknown): boolean => {
     if (!(error instanceof errors.NoHostAvailableError) || isUnknownOutcomeError(error)) return false;
-    return Object.values(error.innerErrors ?? {}).every(inner => {
+    return Object.values(error.innerErrors ?? {}).every((inner: unknown) => {
+        // Driver 4.9/4.10 RequestHandler/PrepareHandler use this literal, not an Error, when
+        // the pinned host is marked DOWN. No query was dispatched to that host.
+        if (inner === 'Host considered as DOWN') return true;
         if (inner instanceof errors.ResponseError || inner instanceof errors.OperationTimedOutError) return false;
         const code = (inner as NodeJS.ErrnoException)?.code;
         return ['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EPIPE', 'ECONNRESET'].includes(code ?? '');
@@ -422,13 +425,30 @@ export const releaseWithExecutor = async (
     }
 };
 
+export const releaseCoordinatedWithExecutor = async (
+    executor: CqlExecutor,
+    name: string,
+    token: string,
+    offline: string | null | undefined,
+    topology: CronLockTopology,
+    arbiter?: CronArbiter
+): Promise<ReleaseResult> => {
+    const ownerBox = arbiterOwner(token);
+    const standDown = resolveMode(parseOffline(offline), topology) === 'standDown';
+    const localOffline = ownerBox && !standDown ? topology.mintNodes.filter(node => node !== topology.nodeCode).join(',') : offline;
+    const result = await releaseWithExecutor(executor, name, token, localOffline, topology);
+    if (ownerBox) {
+        if (!arbiter) throw new Error('Arbiter token release requires the arbiter client');
+        await arbiter.request('release', { network: topology.network, name, ownerBox, token });
+    }
+    return result;
+};
+
 export const release = async (name: string, token: string, offline?: string | null): Promise<void> => {
     try {
         const topology = resolveTopology();
-        const ownerBox = arbiterOwner(token);
-        const localOffline = ownerBox ? topology.mintNodes.filter(node => node !== topology.nodeCode).join(',') : offline;
-        const result = await releaseWithExecutor(getClient(topology), name, token, localOffline, topology);
-        if (ownerBox) await createCronArbiter().request('release', { network: topology.network, name, ownerBox, token });
+        const result = await releaseCoordinatedWithExecutor(getClient(topology), name, token, offline, topology,
+            arbiterOwner(token) ? createCronArbiter() : undefined);
         if (result.status === 'unknown') {
             Logger.log({
                 message: `cron lock '${name}' release failed; if the row survived, '${name}' idles on every box until its lease expires: ${result.message}`,

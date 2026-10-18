@@ -1,7 +1,7 @@
 import { errors, types } from 'cassandra-driver';
 import { performance } from 'node:perf_hooks';
 import { CronArbiter, ArbiterIdentity, ArbiterDecision } from './arbiter';
-import { acquireCoordinatedWithExecutor, CqlExecutor, CronLockTopology } from './cqlCronLock';
+import { acquireCoordinatedWithExecutor, releaseCoordinatedWithExecutor, CqlExecutor, CronLockTopology } from './cqlCronLock';
 import { LOCAL_COORDINATOR_PROFILE } from './cqlClient';
 
 const topology: CronLockTopology = { network: 'preview', nodeCode: 'rdm', mintNodes: ['sfo', 'rdm'], localDataCenter: 'kora-dc2', contactPoints: ['127.0.0.1'] };
@@ -72,6 +72,23 @@ it.each(['unavailable', 'timeout'])('confirms DC1 loss locally before arbiter el
     expect(authority.requests.length).toBe(outcome === 'unavailable' ? 1 : 0);
 });
 
+// Invariant: actual driver DOWN sentinels are eligible only after local SERIAL proves UNAVAILABLE.
+// Failure caught: real 4.9.0 innerErrors contains a plain string, so the RDM survivor never consulted DO.
+// Negative control: remove the exact sentinel classification and this returns unavailable, not held.
+it.each(['Host considered as DOWN', 'arbitrary configuration failure'])('classifies the driver sentinel %s without broadening unknown failures', async sentinel => {
+    const authority = arbiter(() => ({ status: 'draining' }));
+    let localProofs = 0;
+    const executor: CqlExecutor = { async execute(_query, _params, options) {
+        if (options!.executionProfile === LOCAL_COORDINATOR_PROFILE) { localProofs++; throw unavailable(); }
+        throw new errors.NoHostAvailableError({ 'dc1:9042': sentinel } as never);
+    } };
+    const result = await acquireCoordinatedWithExecutor(executor, 'lock', 'none', topology, { arbiter: authority.boundary });
+    const known = sentinel === 'Host considered as DOWN';
+    expect(result.status).toBe(known ? 'held' : 'unavailable');
+    expect(localProofs).toBe(known ? 1 : 0);
+    expect(authority.requests.length).toBe(known ? 1 : 0);
+});
+
 // Invariant: a grant must leave a full Fn lifetime after local admission, without waiting through drain.
 // Failure caught: a run starts within the last 300s or after slow CQL consumes its remaining budget.
 // Negative control: remove either deadline check and the corresponding case grants work.
@@ -118,6 +135,35 @@ it('retires the exact grant on healed SERIAL without deleting the live token row
     expect(await acquireCoordinatedWithExecutor(executor, 'lock', 'none', topology, { arbiter: authority.boundary })).toEqual({ status: 'held', owner: token });
     expect(queries).toBe(1);
     expect(authority.requests).toEqual([{ action: 'release', identity: { network: 'preview', name: 'lock', ownerBox: 'sfo', token } }]);
+});
+
+// Invariant: stale releases cannot remove another acquisition's CQL row or external grant.
+// Failure caught: choosing local release from token shape degenerates into an unconditional clear.
+// Negative control: remove either conditional token check and the live-owner assertions fail.
+it('releases only the exact arbiter acquisition across both stores', async () => {
+    const live = 'rdm:arbiter:12345678-1234-1234-1234-123456789abc';
+    const stale = 'rdm:arbiter:87654321-1234-1234-1234-123456789abc';
+    let row: string | undefined = live;
+    let grant: string | undefined = live;
+    const executor: CqlExecutor = { async execute(query, params = [], options) {
+        expect(query).toMatch(/^DELETE.*IF owner =/);
+        expect(options!.serialConsistency).toBe(types.consistencies.localSerial);
+        const applied = row === params[1];
+        if (applied) row = undefined;
+        return { rows: [{ '[applied]': applied }] };
+    } };
+    const authority: CronArbiter = { async request(action, identity) {
+        expect(action).toBe('release');
+        if (grant !== identity.token) return { status: 'held' };
+        grant = undefined;
+        return { status: 'released' };
+    } };
+    expect(await releaseCoordinatedWithExecutor(executor, 'lock', stale, 'none', topology, authority)).toEqual({ status: 'released' });
+    expect(row).toBe(live);
+    expect(grant).toBe(live);
+    expect(await releaseCoordinatedWithExecutor(executor, 'lock', live, 'none', topology, authority)).toEqual({ status: 'released' });
+    expect(row).toBeUndefined();
+    expect(grant).toBeUndefined();
 });
 
 it('keeps operator offline stand-down and never asks the arbiter on that box', async () => {
