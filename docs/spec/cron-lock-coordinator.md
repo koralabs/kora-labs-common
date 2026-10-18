@@ -20,7 +20,7 @@ HTTP body-read failures retain the observed response status on the original erro
 
 Consumer integration: update `@koralabs/kora-labs-common` to 6.20.3 in minting.handle.me, hal-minting-engine and any JSON/raw-response transport consumers (including handle.me), updating their lockfiles together. No API signature changes. Publishing and consumer integration are intentionally deferred to the parent; this package task performs neither deployment nor publication.
 
-Focused validation: `npm test -- --runInBand src/cronLock src/chain/transport` and `npm run build`. Renewal regression was run with the refreshing guard removed and failed (`peerUnavailable` instead of `unavailable`), then restored. No full suite is run here; parent integration owns it. Disposable two-box database acceptance below remains a separate integration gate, not something the in-memory behavior tests claim to prove.
+Validation: focused `npm test -- --runInBand src/cronLock src/chain/transport` passed 83 tests across 7 suites; `npm run build` passed. Renewal regression was run with the refreshing guard removed and failed (`peerUnavailable` instead of `unavailable`), then restored. Final full local `npm test -- --runInBand` passed 454 tests across 44 suites (zero snapshots, exit 0); detached run logs are under `tmp/final-validation/`. There are no standalone browser journeys in this package; Playwright helper behavior tests are included in the unit suite. Disposable two-box database acceptance below remains a separate integration gate, not something the in-memory behavior tests claim to prove.
 
 ## Local integration test only
 
