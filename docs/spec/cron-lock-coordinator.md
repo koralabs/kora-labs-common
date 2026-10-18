@@ -38,6 +38,10 @@ Consumer integration: update `@koralabs/kora-labs-common` to 6.20.3 in minting.h
 
 Validation: focused `npm test -- --runInBand src/cronLock src/chain/transport` passed 83 tests across 7 suites; `npm run build` passed. Renewal regression was run with the refreshing guard removed and failed (`peerUnavailable` instead of `unavailable`), then restored. Final full local `npm test -- --runInBand` passed 454 tests across 44 suites (zero snapshots, exit 0); detached run logs are under `tmp/final-validation/`. There are no standalone browser journeys in this package; Playwright helper behavior tests are included in the unit suite. Disposable two-box database acceptance below remains a separate integration gate, not something the in-memory behavior tests claim to prove.
 
+## Test network boundary
+
+Jest loads `tests/network-guard.cjs` before application imports in every worker. It removes ambient AWS variables, disables credentials/config/metadata discovery, selects `aws-test.invalid`, and denies HTTP/HTTPS/fetch/TCP/TLS except ports belonging to this process's live loopback servers. Child Node processes inherit the preload. Real, unfaked KMS and S3 clients with explicit dummy credentials and production endpoints are asserted to fail with `TEST_NETWORK_DENIED`; no negative control may disable the guard against a real external endpoint. The S3 SDK is a test-only dependency for this proof. Integration scripts run outside Jest with explicit fixed LAB IPs and a test-only loopback Worker fixture, never ambient endpoints or live Worker leases.
+
 ## Local integration test only
 
 Never run this in GitHub Actions or against production. Use two disposable `scylladb/scylla:6.2` containers on an isolated Docker network with subnet `172.20.0.0/16` and IPs `172.20.0.2` / `172.20.0.3`, one CPU and 1 GiB each. Mount `cassandra-rackdc.properties` with `dc=kora-dc1` / `dc=kora-dc2`, respectively. Use `--endpoint-snitch GossipingPropertyFileSnitch`, seed the second from the first, and wait until BOTH are UN before adding delay. Delay during bootstrap makes repair unnecessarily slow.
