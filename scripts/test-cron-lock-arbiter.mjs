@@ -52,15 +52,16 @@ lines.on('line', text => { const event = JSON.parse(text); if (pending) { const 
 const next = () => queue.length ? Promise.resolve(queue.shift()) : new Promise(resolve => { pending = resolve; });
 const command = async data => { fixture.stdin.write(`${JSON.stringify(data)}\n`); return next(); };
 let clients = [], arbiterCalls = 0, soloWrites = 0, localProofs = 0;
+const evidenceWriteMs = [], evidenceReadMs = [], requests = [];
 let authority;
 const results = {};
 try {
     const ready = await next();
     assert.equal(new URL(ready.url).hostname, '127.0.0.1');
-    authority = createCronArbiter({ KORA_CRON_ARBITER_URL: ready.url, KORA_CRON_ARBITER_HMAC_SECRET: '1'.repeat(64) }, async (...args) => { arbiterCalls++; return fetch(...args); });
+    authority = createCronArbiter({ KORA_CRON_ARBITER_URL: ready.url, KORA_CRON_ARBITER_HMAC_SECRET: '1'.repeat(64) }, async (...args) => { arbiterCalls++; requests.push(JSON.parse(args[1].body)); return fetch(...args); });
     for (const name of names) docker('start', name);
     await sleep(20000); delay(); await partition(false);
-    clients = topologies.map(topology => {
+    const makeClient = topology => {
         const real = createCqlExecutor(topology);
         return { shutdown: () => real.shutdown(), execute(query, params, options) {
             if (options?.serialConsistency === types.consistencies.localSerial && query.startsWith('INSERT')) soloWrites++;
@@ -68,7 +69,12 @@ try {
                 assert(query.startsWith('SELECT owner'), 'reachability proof must not write a lock');
                 localProofs++;
             }
-            return real.execute(query, params, options).catch(error => {
+            const started = performance.now();
+            return real.execute(query, params, options).then(reply => {
+                if (query.includes('USING TIMESTAMP')) evidenceWriteMs.push(performance.now() - started);
+                if (query.startsWith('SELECT owner, writetime')) evidenceReadMs.push(performance.now() - started);
+                return reply;
+            }).catch(error => {
                 console.log(JSON.stringify({ phase: 'cql-boundary-error', node: topology.nodeCode,
                     error: error.name, message: error.message,
                     inner: Object.fromEntries(Object.entries(error.innerErrors ?? {}).map(([host, inner]) =>
@@ -76,14 +82,16 @@ try {
                 throw error;
             });
         } };
-    });
+    };
+    clients = topologies.map(makeClient);
     const setup = new Client({ contactPoints: [ips[0]], localDataCenter: 'kora-dc1' });
     try {
         await setup.execute("CREATE KEYSPACE IF NOT EXISTS kora_locks WITH replication={'class':'NetworkTopologyStrategy','kora-dc1':1,'kora-dc2':1} AND tablets={'enabled':false}");
         await setup.execute('CREATE TABLE IF NOT EXISTS kora_locks.cron_lock(name text PRIMARY KEY, owner text, acquired_at timestamp)');
     } finally { await setup.shutdown(); }
-    const acquire = async (i, name) => {
-        try { return await acquireCoordinatedWithExecutor(clients[i], name, 'none', topologies[i], { leaseMs: 600000, arbiter: authority }); }
+    const acquire = async (i, name, wall) => {
+        try { return await acquireCoordinatedWithExecutor(clients[i], name, 'none', topologies[i], {
+            leaseMs: 600000, arbiter: authority, ...(wall === undefined ? {} : { wallNow: () => wall }) }); }
         catch (error) { return { status: 'unavailable', message: error.message }; }
     };
     const release = (i, name, result) => releaseCoordinatedWithExecutor(clients[i], name, result.token, 'none', topologies[i], authority);
@@ -155,6 +163,42 @@ try {
     }
     results.healBothDirections = results.partition2FreshDrain = results.crashTokenPreserved = true;
 
+    // Pending-only heal: no grant/token row exists to retire, so durable causal evidence must
+    // invalidate the old drain even when the OPPOSITE cold box asks first after re-partition.
+    for (const cadence of [60000, 300000]) for (const healedOwner of [0, 1]) {
+        const contender = 1-healedOwner;
+        const name = `${namespace}.pending${cadence}.${healedOwner}`;
+        for (const [node, clock] of [[contender, 1700000000000], [healedOwner, 10]]) {
+            const seed = await acquire(node, name, clock);
+            assert.equal(seed.status, 'acquired', JSON.stringify(seed));
+            assert.equal((await release(node, name, seed)).status, 'released');
+        }
+        await partition(true);
+        assert.equal((await acquire(contender, name)).status, 'held');
+        await command({ advanceMs: cadence });
+        await partition(false);
+        const healed = await acquire(healedOwner, name, 5); // clock moved backward: logical value must become 11
+        assert.equal(healed.status, 'acquired', JSON.stringify(healed));
+        assert.equal((await release(healedOwner, name, healed)).status, 'released');
+        await clients[contender].shutdown();
+        clients[contender] = makeClient(topologies[contender]); // no warm-process memory
+        await command({ restart: true }); // real persisted DO baseline, not a JS lease fake
+        await partition(true);
+        assert.equal((await acquire(contender, name)).status, 'held', 'pending-only heal must start fresh drain');
+        const evidence = requests.at(-1).lastNormalSuccess;
+        assert.equal(evidence[topologies[healedOwner].nodeCode], 11);
+        assert.equal(evidence[topologies[contender].nodeCode], 1700000000000);
+        await command({ advanceMs: 299999 });
+        assert.equal((await acquire(contender, name)).status, 'held', 'opposite-box heal must not reuse elapsed old drain');
+        await command({ advanceMs: 1 });
+        const fresh = await acquire(contender, name);
+        assert.equal(fresh.status, 'acquired', JSON.stringify(fresh));
+        assert.equal((await release(contender, name, fresh)).status, 'released');
+        await partition(false);
+        results[`pendingOnlyHeal${cadence}Box${healedOwner}`] = true;
+    }
+    results.skewedClockAndColdRestart = true;
+
     // Expiry owner change during a still-partitioned episode; old holder is modeled crashed/killed.
     await partition(true);
     const expiryName = `${namespace}.expiryOwner`;
@@ -209,7 +253,10 @@ try {
     }
     results.crashRealTtlRecovery = true;
     }
-    console.log(JSON.stringify({ results, arbiterCalls, soloWrites, localProofs }));
+    const latency = values => ({ samples: values.length, minMs: Math.min(...values),
+        medianMs: [...values].sort((a,b) => a-b)[Math.floor(values.length/2)], maxMs: Math.max(...values) });
+    console.log(JSON.stringify({ results, arbiterCalls, soloWrites, localProofs,
+        normalEvidenceQuorumWrite: latency(evidenceWriteMs), normalEvidenceLocalRead: latency(evidenceReadMs) }));
 } finally {
     try { if (names.every(name => docker('inspect', '--format', '{{.State.Running}}', name).trim() === 'true')) await partition(false); } catch {}
     await Promise.all(clients.map(c => c.shutdown()));

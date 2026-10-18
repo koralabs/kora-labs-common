@@ -23,13 +23,21 @@ const arbiter = (decision: () => ArbiterDecision = () => ({ status: 'granted', d
 // Negative control: moving arbiter acquisition ahead of SERIAL makes the empty-request assertion fail.
 it.each(['lock.mintPaidSessionsLock', 'lock.updateActiveSessionsLock'])('keeps healthy %s SERIAL-only', async name => {
     const authority = arbiter();
-    const executor: CqlExecutor = { async execute(_query, _params, options) {
+    let evidence: string | undefined;
+    const executor: CqlExecutor = { async execute(query, params, options) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
+        if (query.includes('USING TIMESTAMP')) {
+            expect(options!.consistency).toBe(types.consistencies.quorum);
+            evidence = String(params![1]);
+            return { rows: [] };
+        }
         expect(options!.serialConsistency).toBe(types.consistencies.serial);
         expect(options!.consistency).toBe(types.consistencies.quorum);
         return { rows: [{ '[applied]': true }] };
     } };
     expect(await acquireCoordinatedWithExecutor(executor, name, 'none', topology, { arbiter: authority.boundary })).toMatchObject({ status: 'acquired' });
     expect(authority.requests).toEqual([]);
+    expect(JSON.parse(evidence!)).toMatchObject({ sfo: 0, rdm: expect.any(Number) });
 });
 
 // Invariant: disabling AUTOMATIC solo does not remove the human-declared offline override.
@@ -62,7 +70,10 @@ it.each([undefined, false])('preserves explicit sole-online LOCAL_SERIAL when ar
 it('does not bypass an enabled arbiter on an explicit sole-online box', async () => {
     const authority = arbiter(() => ({ status: 'draining' }));
     let localWrites = 0;
-    const executor: CqlExecutor = { async execute() { localWrites++; return { rows: [{ '[applied]': true }] }; } };
+    const executor: CqlExecutor = { async execute(query) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
+        localWrites++; return { rows: [{ '[applied]': true }] };
+    } };
     expect(await acquireCoordinatedWithExecutor(executor, 'lock', 'sfo', topology, { arbiter: authority.boundary })).toEqual({ status: 'held' });
     expect(localWrites).toBe(0);
     expect(authority.requests.map(x => x.action)).toEqual(['acquire']);
@@ -74,7 +85,8 @@ it('does not bypass an enabled arbiter on an explicit sole-online box', async ()
 it('protects a rebalance holder under partition with an arbiter token in the same CQL row', async () => {
     const authority = arbiter();
     const rows = new Map<string, string>();
-    const executor: CqlExecutor = { async execute(_query, params = [], options) {
+    const executor: CqlExecutor = { async execute(query, params = [], options) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
         if (options!.serialConsistency === types.consistencies.serial) throw unavailable();
         expect(options!.serialConsistency).toBe(types.consistencies.localSerial);
         const [name, token] = params as string[];
@@ -95,7 +107,8 @@ it('protects a rebalance holder under partition with an arbiter token in the sam
 it.each(['unavailable', 'timeout'])('confirms DC1 loss locally before arbiter eligibility: %s', async outcome => {
     const authority = arbiter();
     let localProofs = 0;
-    const executor: CqlExecutor = { async execute(_query, _params, options) {
+    const executor: CqlExecutor = { async execute(query, _params, options) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
         if (options!.serialConsistency === types.consistencies.localSerial) return { rows: [{ '[applied]': true }] };
         if (options!.executionProfile !== LOCAL_COORDINATOR_PROFILE) throw noCoordinator();
         localProofs++;
@@ -133,7 +146,8 @@ it('does not mutate ownership or arbitrate when only the app-to-DC1 route is dow
 it.each(['Host considered as DOWN', 'arbitrary configuration failure'])('classifies the driver sentinel %s without broadening unknown failures', async sentinel => {
     const authority = arbiter(() => ({ status: 'draining' }));
     let localProofs = 0;
-    const executor: CqlExecutor = { async execute(_query, _params, options) {
+    const executor: CqlExecutor = { async execute(query, _params, options) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
         if (options!.executionProfile === LOCAL_COORDINATOR_PROFILE) { localProofs++; throw unavailable(); }
         throw new errors.NoHostAvailableError({ 'dc1:9042': sentinel } as never);
     } };
@@ -155,6 +169,7 @@ it.each(['short-before', 'short-after', 'draining', 'held'])('does not run on %s
     let localWrites = 0;
     let deletes = 0;
     const executor: CqlExecutor = { async execute(query, _params, options) {
+        if (query.startsWith('SELECT owner, writetime')) return { rows: [] };
         if (options!.serialConsistency === types.consistencies.serial) throw unavailable();
         if (query.startsWith('DELETE')) { deletes++; return { rows: [{ '[applied]': true }] }; }
         localWrites++;

@@ -28,7 +28,7 @@ import { performance } from 'node:perf_hooks';
 import { errors, types } from 'cassandra-driver';
 import { LogCategory, Logger } from '../logger';
 import { createCqlExecutor, LOCAL_COORDINATOR_PROFILE } from './cqlClient';
-import { arbiterOwner, ARBITER_LEASE_MS, createCronArbiter, CronArbiter, MAX_SOLO_RUN_MS } from './arbiter';
+import { arbiterOwner, ARBITER_LEASE_MS, createCronArbiter, CronArbiter, LastNormalSuccess, MAX_SOLO_RUN_MS } from './arbiter';
 
 const KEYSPACE = 'kora_locks';
 const LOCK_TABLE = 'cron_lock';
@@ -298,13 +298,47 @@ export interface AcquireOptions {
     arbiter?: boolean;
 }
 
+const evidenceKey = (name: string, topology: CronLockTopology): string => `${topology.network}:!normal-success:${name}`;
+
+const readNormalSuccess = async (executor: CqlExecutor, name: string, topology: CronLockTopology): Promise<{
+    vector: LastNormalSuccess; version: bigint;
+}> => {
+    const result = await executor.execute(`SELECT owner, writetime(owner) AS version FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`,
+        [evidenceKey(name, topology)], { prepare: true, consistency: types.consistencies.localOne });
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return { vector: { sfo: 0, rdm: 0 }, version: BigInt(0) };
+    const vector = typeof row.owner === 'string' ? JSON.parse(row.owner) : null;
+    const version = String(row.version);
+    if (!vector || Object.keys(vector).sort().join(',') !== 'rdm,sfo' ||
+        ![vector.sfo, vector.rdm].every(value => Number.isSafeInteger(value) && value >= 0) || !/^\d+$/.test(version)) {
+        throw new Error('Invalid durable normal-success evidence');
+    }
+    return { vector, version: BigInt(version) };
+};
+
+/** Persist to BOTH replicas before work, so the opposite box can prove a heal after a cold start. */
+const recordNormalSuccess = async (executor: CqlExecutor, name: string, topology: CronLockTopology, wallNow: () => number): Promise<void> => {
+    const { vector, version } = await readNormalSuccess(executor, name, topology);
+    if (topology.nodeCode !== 'sfo' && topology.nodeCode !== 'rdm') throw new Error('Unsupported arbiter box identity');
+    const time = wallNow();
+    const next = Math.max(time, vector[topology.nodeCode] + 1);
+    if (!Number.isSafeInteger(next) || next < 0) throw new Error('Invalid normal-success clock');
+    vector[topology.nodeCode] = next;
+    // The payload has per-box clocks; the CQL LWW timestamp must ALSO advance across boxes whose
+    // clocks differ. Otherwise a behind-clock writer's newer causal evidence would be silently lost.
+    const micros = BigInt(time) * BigInt(1000);
+    const timestamp = types.Long.fromString((micros > version ? micros : version + BigInt(1)).toString());
+    await executor.execute(`INSERT INTO ${KEYSPACE}.${LOCK_TABLE} (name, owner) VALUES (?, ?) USING TIMESTAMP ?`,
+        [evidenceKey(name, topology), JSON.stringify(vector), timestamp], { prepare: true, consistency: types.consistencies.quorum });
+};
+
 /** Complete admission lifecycle; injected boundaries exercise the real CQL and HTTP behavior in the lab. */
 export const acquireCoordinatedWithExecutor = async (
     executor: CqlExecutor,
     name: string,
     offline: string | null | undefined,
     topology: CronLockTopology,
-    options: { leaseMs?: number; arbiter?: CronArbiter; now?: () => number } = {}
+    options: { leaseMs?: number; arbiter?: CronArbiter; now?: () => number; wallNow?: () => number } = {}
 ): Promise<AcquireResult> => {
     const now = options.now ?? (() => performance.now());
     const mode = resolveMode(parseOffline(offline), topology);
@@ -329,6 +363,13 @@ export const acquireCoordinatedWithExecutor = async (
             }
         }
         if (normal.status === 'acquired' || normal.status === 'held') {
+            if (normal.status === 'acquired' && mode === 'serial') {
+                try { await recordNormalSuccess(executor, name, topology, options.wallNow ?? Date.now); }
+                catch (error) {
+                    await releaseWithExecutor(executor, name, normal.token, offline, topology);
+                    return { status: 'unavailable', message: `Normal-success evidence was not confirmed: ${error instanceof Error ? error.message : String(error)}` };
+                }
+            }
             if (normal.status === 'held' && normal.owner && options.arbiter) {
                 // A SERIAL result proves the link healed. Retire the solo episode, NOT its CQL row:
                 // that token continues protecting any in-flight Fn until its conditional release/TTL.
@@ -343,7 +384,8 @@ export const acquireCoordinatedWithExecutor = async (
     }
     if (!options.arbiter) throw new Error('An arbiter is required for automatic solo admission');
     const token = `${topology.nodeCode}:arbiter:${randomUUID()}`;
-    const identity = { network: topology.network, name, ownerBox: topology.nodeCode, token };
+    const { vector: lastNormalSuccess } = await readNormalSuccess(executor, name, topology);
+    const identity = { network: topology.network, name, ownerBox: topology.nodeCode, token, lastNormalSuccess };
     const grant = await options.arbiter.request('acquire', identity);
     if (grant.status !== 'granted') return { status: 'held' };
     const localOffline = topology.mintNodes.filter(node => node !== topology.nodeCode).join(',');

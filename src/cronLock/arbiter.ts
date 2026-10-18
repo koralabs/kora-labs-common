@@ -6,11 +6,14 @@ export const ARBITER_LEASE_MS = 600_000;
 export const MAX_SOLO_RUN_MS = 300_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 
+export interface LastNormalSuccess { sfo: number; rdm: number }
+
 export interface ArbiterIdentity {
     network: string;
     name: string;
     ownerBox: string;
     token: string;
+    lastNormalSuccess?: LastNormalSuccess;
 }
 
 export type ArbiterDecision =
@@ -40,7 +43,8 @@ export const createCronArbiter = (
         const secret = env.KORA_CRON_ARBITER_HMAC_SECRET;
         if (!secret) throw new Error('KORA_CRON_ARBITER_HMAC_SECRET is required for arbiter coordination');
         const url = new URL(`/v1/cron-lock/${action}`, endpoint);
-        const body = JSON.stringify({ ...identity, leaseMs: ARBITER_LEASE_MS, maxRunMs: MAX_SOLO_RUN_MS });
+        const body = JSON.stringify({ ...identity, lastNormalSuccess: identity.lastNormalSuccess ?? { sfo: 0, rdm: 0 },
+            leaseMs: ARBITER_LEASE_MS, maxRunMs: MAX_SOLO_RUN_MS });
         const timestamp = String(Math.floor(Date.now() / 1000));
         const signature = createHmac('sha256', secret).update(`${timestamp}.POST.${url.pathname}.${body}`).digest('hex');
         const started = performance.now();

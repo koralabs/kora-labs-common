@@ -19,7 +19,7 @@ it('signs every exact request field and does not follow redirects', async () => 
     expect(result.status).toBe('granted');
     expect(target).toBe('https://arbiter.invalid/v1/cron-lock/acquire');
     expect(request!.redirect).toBe('manual');
-    expect(JSON.parse(String(request!.body))).toEqual({ ...identity, leaseMs: ARBITER_LEASE_MS, maxRunMs: MAX_SOLO_RUN_MS });
+    expect(JSON.parse(String(request!.body))).toEqual({ ...identity, lastNormalSuccess: { sfo: 0, rdm: 0 }, leaseMs: ARBITER_LEASE_MS, maxRunMs: MAX_SOLO_RUN_MS });
     const headers = new Headers(request!.headers);
     const expected = createHmac('sha256', 'unit-secret').update(`${headers.get('x-kora-timestamp')}.POST./v1/cron-lock/acquire.${request!.body}`).digest('hex');
     expect(headers.get('x-kora-signature')).toBe(expected);
