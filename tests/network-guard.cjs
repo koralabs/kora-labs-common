@@ -23,17 +23,17 @@ const preload = `--require=${path.resolve(__filename)}`;
 if (!(process.env.NODE_OPTIONS || '').split(/\s+/).includes(preload)) process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} ${preload}`.trim();
 
 const installed = Symbol.for('kora-labs-common.test.networkGuard');
+class TestNetworkDeniedError extends Error {
+    constructor(host, port) {
+        super(`Test network denied: ${host}:${port}; only this process's loopback test servers are allowed`);
+        this.code = 'TEST_NETWORK_DENIED';
+    }
+}
 if (!net[installed]) {
     const ports = new Set();
-    class TestNetworkDeniedError extends Error {
-        constructor(host, port) {
-            super(`Test network denied: ${host}:${port}; only this process's loopback test servers are allowed`);
-            this.code = 'TEST_NETWORK_DENIED';
-        }
-    }
     const check = (host, port) => {
         const normalized = String(host || 'localhost').replace(/^\[|\]$/g, '');
-        if (!['localhost', '127.0.0.1', '::1'].includes(normalized) || !ports.has(Number(port))) throw new TestNetworkDeniedError(normalized, port);
+        if (!['localhost', '127.0.0.1', '::1'].includes(normalized) || !ports.has(Number(port))) throw net[installed].errorFactory(normalized, port);
     };
     const listen = net.Server.prototype.listen;
     net.Server.prototype.listen = function (...args) {
@@ -56,7 +56,7 @@ if (!net[installed]) {
     net.Socket.prototype.connect = function (...args) {
         let options = Array.isArray(args[0]) ? args[0][0] : args[0];
         if (typeof options !== 'object') options = { port: options, host: typeof args[1] === 'string' ? args[1] : 'localhost' };
-        if (options.path) throw new TestNetworkDeniedError('unix-socket', options.path);
+        if (options.path) throw net[installed].errorFactory('unix-socket', options.path);
         check(options.host || options.hostname, options.port);
         // A custom DNS resolver must not turn an allowed localhost name into a remote address.
         if ((options.host || options.hostname) === 'localhost') options.host = '127.0.0.1';
@@ -82,6 +82,9 @@ if (!net[installed]) {
     net[installed] = { check };
     require('node:module').syncBuiltinESMExports();
 }
+// Socket wrappers outlive a Jest realm. Construct errors in the CURRENT realm so SDKs do not
+// erase their code by wrapping a foreign-realm Error as an arbitrary thrown object.
+net[installed].errorFactory = (host, port) => new TestNetworkDeniedError(host, port);
 // Jest has a fresh global realm per suite, but shares the process's built-in socket modules.
 const fetch = globalThis.fetch;
 globalThis.fetch = function (input, init) {
