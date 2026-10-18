@@ -1,7 +1,7 @@
-import { errors, types } from 'cassandra-driver';
+import { Client, errors, types } from 'cassandra-driver';
 import { performance } from 'node:perf_hooks';
 import { CronArbiter, ArbiterIdentity, ArbiterDecision } from './arbiter';
-import { acquireCoordinatedWithExecutor, releaseCoordinatedWithExecutor, CqlExecutor, CronLockTopology } from './cqlCronLock';
+import { acquire, acquireCoordinatedWithExecutor, releaseCoordinatedWithExecutor, CqlExecutor, CronLockTopology } from './cqlCronLock';
 import { LOCAL_COORDINATOR_PROFILE } from './cqlClient';
 
 const topology: CronLockTopology = { network: 'preview', nodeCode: 'rdm', mintNodes: ['sfo', 'rdm'], localDataCenter: 'kora-dc2', contactPoints: ['127.0.0.1'] };
@@ -30,6 +30,42 @@ it.each(['lock.mintPaidSessionsLock', 'lock.updateActiveSessionsLock'])('keeps h
     } };
     expect(await acquireCoordinatedWithExecutor(executor, name, 'none', topology, { arbiter: authority.boundary })).toMatchObject({ status: 'acquired' });
     expect(authority.requests).toEqual([]);
+});
+
+// Invariant: disabling AUTOMATIC solo does not remove the human-declared offline override.
+// Failure caught: staging arbiter:false changes /mintserver semantics or accidentally contacts the DO.
+// Negative control: route false through SERIAL or through the arbiter and persisted ownership/fetch assertions fail.
+it.each([undefined, false])('preserves explicit sole-online LOCAL_SERIAL when arbiter is %s', async enabled => {
+    const env = { ...process.env };
+    Object.assign(process.env, { NETWORK: 'preview', KORA_NODE_CODE: 'rdm', KORA_MINT_NODES: 'sfo,rdm',
+        KORA_SCYLLA_DC: 'kora-dc2', KORA_CQL_CONTACT_POINTS: '127.0.0.1' });
+    const rows = new Map<string, string>();
+    const fetcher = jest.spyOn(globalThis, 'fetch');
+    jest.spyOn(Client.prototype, 'execute').mockImplementation((async (query: string, params: unknown[], options: Record<string, unknown>) => {
+        if (query.startsWith('SELECT table_name')) return { rows: [{ table_name: 'cron_lock' }] };
+        expect(options.serialConsistency).toBe(types.consistencies.localSerial);
+        expect(options.consistency).toBe(types.consistencies.localQuorum);
+        rows.set(String(params[0]), String(params[1]));
+        return { rows: [{ '[applied]': true }] };
+    }) as never);
+    try {
+        const result = await acquire('lock.mintPaidSessionsLock', 'sfo', enabled === undefined ? {} : { arbiter: enabled });
+        expect(result.status).toBe('acquired');
+        expect(rows.get('preview:lock.mintPaidSessionsLock')).toBe(result.status === 'acquired' ? result.token : 'must acquire');
+        expect(fetcher).not.toHaveBeenCalled();
+    } finally { process.env = env; jest.restoreAllMocks(); }
+});
+
+// Invariant: enabled arbiter authority is required even for a per-DC explicit offline declaration.
+// Failure caught: an isolated peer misses /mintserver and runs concurrently with a local override.
+// Negative control: reuse the false/omitted override for true and localWrites becomes one while draining.
+it('does not bypass an enabled arbiter on an explicit sole-online box', async () => {
+    const authority = arbiter(() => ({ status: 'draining' }));
+    let localWrites = 0;
+    const executor: CqlExecutor = { async execute() { localWrites++; return { rows: [{ '[applied]': true }] }; } };
+    expect(await acquireCoordinatedWithExecutor(executor, 'lock', 'sfo', topology, { arbiter: authority.boundary })).toEqual({ status: 'held' });
+    expect(localWrites).toBe(0);
+    expect(authority.requests.map(x => x.action)).toEqual(['acquire']);
 });
 
 // Invariant: every holder of a name, including wallet rebalance, needs BOTH the grant and local CQL row.
@@ -70,6 +106,25 @@ it.each(['unavailable', 'timeout'])('confirms DC1 loss locally before arbiter el
     expect(localProofs).toBeGreaterThan(0);
     expect(result.status).toBe(outcome === 'unavailable' ? 'acquired' : 'unavailable');
     expect(authority.requests.length).toBe(outcome === 'unavailable' ? 1 : 0);
+});
+
+// Invariant: eligibility confirmation must not create a normal lock on an alternate coordinator.
+// Failure caught: a healthy-peer local probe INSERT creates ownership whose release still routes to inaccessible DC1.
+// Negative control: change SELECT to INSERT and the read-only assertion fails.
+it('does not mutate ownership or arbitrate when only the app-to-DC1 route is down', async () => {
+    const authority = arbiter();
+    let localReads = 0;
+    const executor: CqlExecutor = { async execute(query, _params, options) {
+        if (options!.executionProfile !== LOCAL_COORDINATOR_PROFILE) throw noCoordinator();
+        expect(query).toMatch(/^SELECT owner/);
+        expect(options!.consistency).toBe(types.consistencies.serial);
+        localReads++;
+        return { rows: [] };
+    } };
+    const result = await acquireCoordinatedWithExecutor(executor, 'lock', 'none', topology, { arbiter: authority.boundary });
+    expect(result).toMatchObject({ status: 'unavailable', message: expect.stringContaining('responsive peer quorum') });
+    expect(localReads).toBe(1);
+    expect(authority.requests).toEqual([]);
 });
 
 // Invariant: actual driver DOWN sentinels are eligible only after local SERIAL proves UNAVAILABLE.

@@ -15,6 +15,8 @@ const names = ['incident-lock-proof-dc1', 'incident-lock-proof-dc2'];
 const ips = ['172.20.0.2', '172.20.0.3'];
 const infra = resolve('../kora-self-hosted-apps');
 const namespace = `arbiterLab.${Date.now()}`;
+assert(process.argv.slice(2).every(arg => arg === '--normal-handoff-only'));
+const normalOnly = process.argv.includes('--normal-handoff-only');
 const topologies = ips.map((ip, i) => ({ network: 'preview', nodeCode: i ? 'rdm' : 'sfo',
     mintNodes: ['sfo', 'rdm'], localDataCenter: `kora-dc${i + 1}`, contactPoints: [ip] }));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -62,7 +64,10 @@ try {
         const real = createCqlExecutor(topology);
         return { shutdown: () => real.shutdown(), execute(query, params, options) {
             if (options?.serialConsistency === types.consistencies.localSerial && query.startsWith('INSERT')) soloWrites++;
-            if (options?.executionProfile === LOCAL_COORDINATOR_PROFILE && options.serialConsistency === types.consistencies.serial) localProofs++;
+            if (options?.executionProfile === LOCAL_COORDINATOR_PROFILE && options.consistency === types.consistencies.serial) {
+                assert(query.startsWith('SELECT owner'), 'reachability proof must not write a lock');
+                localProofs++;
+            }
             return real.execute(query, params, options).catch(error => {
                 console.log(JSON.stringify({ phase: 'cql-boundary-error', node: topology.nodeCode,
                     error: error.name, message: error.message,
@@ -92,9 +97,18 @@ try {
     assert.deepEqual(normal.map(r => r.status).sort(), ['acquired', 'held']);
     assert.equal(arbiterCalls, before, 'normal operation must never contact arbiter');
     const normalWinner = normal.findIndex(r => r.status === 'acquired');
+    await partition(true);
+    assert.equal((await acquire(1-normalWinner, normalName)).status, 'held', 'prior SERIAL holder requires drain');
+    await command({ advanceMs: 299999 });
+    assert.equal((await acquire(1-normalWinner, normalName)).status, 'held');
+    await command({ advanceMs: 1 });
+    assert.equal((await acquire(1-normalWinner, normalName)).status, 'held', 'a grant cannot bypass the existing normal token row');
+    await partition(false);
+    assert.equal(await serialOwner(1-normalWinner, normalName), normal[normalWinner].token);
     assert.equal((await release(normalWinner, normalName, normal[normalWinner])).status, 'released');
-    results.normalNoArbiter = true;
+    results.normalNoArbiter = results.existingNormalHolderPartitionSafe = true;
 
+    if (!normalOnly) {
     // Every holder of this name is protected, including wallet rebalance (not just root-UTxO mint).
     const rebalance = `${namespace}.rebalancePartition`;
     await partition(true);
@@ -194,6 +208,7 @@ try {
         assert.equal((await release(crash.owner, crash.name, recovered)).status, 'released');
     }
     results.crashRealTtlRecovery = true;
+    }
     console.log(JSON.stringify({ results, arbiterCalls, soloWrites, localProofs }));
 } finally {
     try { if (names.every(name => docker('inspect', '--format', '{{.State.Running}}', name).trim() === 'true')) await partition(false); } catch {}

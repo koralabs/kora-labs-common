@@ -315,12 +315,18 @@ export const acquireCoordinatedWithExecutor = async (
         if (normal.status === 'unavailable' && normal.coordinatorUnreachable && topology.localDataCenter !== 'kora-dc1' && options.arbiter) {
             // This is still SERIAL/QUORUM. Only a definite UNAVAILABLE from the local coordinator
             // proves peer loss; arbitrary NoHostAvailable, timeouts and local failures never authorize solo.
-            const localCoordinator: CqlExecutor = {
-                execute: (query, params, queryOptions) => executor.execute(query, params, {
-                    ...queryOptions, executionProfile: LOCAL_COORDINATOR_PROFILE
-                })
-            };
-            normal = await acquireWithExecutor(localCoordinator, name, offline, topology, normalToken, options.leaseMs);
+            try {
+                const probe = await executor.execute(`SELECT owner FROM ${KEYSPACE}.${LOCK_TABLE} WHERE name = ?`,
+                    [scopeName(name, topology)], { prepare: true, consistency: types.consistencies.serial,
+                        executionProfile: LOCAL_COORDINATOR_PROFILE });
+                const owner = (probe.rows[0] as Record<string, unknown> | undefined)?.owner;
+                normal = typeof owner === 'string' ? { status: 'held', ...(arbiterOwner(owner) ? { owner } : {}) }
+                    : { status: 'unavailable', message: 'Pinned coordinator unreachable, but the local SERIAL read confirms a responsive peer quorum' };
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                normal = isPeerUnavailableError(error) ? { status: 'peerUnavailable', token: normalToken, message }
+                    : { status: 'unavailable', message };
+            }
         }
         if (normal.status === 'acquired' || normal.status === 'held') {
             if (normal.status === 'held' && normal.owner && options.arbiter) {

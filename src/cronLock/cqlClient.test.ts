@@ -17,6 +17,8 @@ it.each([
     ['DELETE', { serialConsistency: types.consistencies.localSerial, consistency: types.consistencies.localQuorum }, undefined],
     ['SELECT table_name', { consistency: types.consistencies.localOne }, undefined],
     ['LOCAL PROOF INSERT', { serialConsistency: types.consistencies.serial, consistency: types.consistencies.quorum,
+        executionProfile: LOCAL_COORDINATOR_PROFILE }, LOCAL_COORDINATOR_PROFILE],
+    ['LOCAL PROOF SELECT', { consistency: types.consistencies.serial,
         executionProfile: LOCAL_COORDINATOR_PROFILE }, LOCAL_COORDINATOR_PROFILE]
 ])('preserves the %s network contract', async (query, options, executionProfile) => {
     const reply = { rows: [{ owner: 'rdm:invocation', '[applied]': true }] };
