@@ -1,57 +1,33 @@
-// Object-store config shim: swap AWS S3 <-> Cloudflare R2 behind one env-gated factory.
-// Analogous to the KMS<->SOPS swap (kmsEnvironment) and the local-RS256 JWT shim (jwtSigner):
-// a thin, shared, reversible seam so call sites don't bake in a provider.
-//
-// R2 is S3-API-compatible, so this returns an object assignable to @aws-sdk/client-s3's
-// S3ClientConfig (region/endpoint/credentials) -- call sites keep using
-//   `new S3Client(objectStoreConfig())`  + GetObjectCommand({ Bucket, Key })
-// completely UNCHANGED. The bucket name and keys stay in the command, not here.
-//
-// REVERSIBILITY: with no R2 env set this returns exactly the previous AWS S3 config
-// ({ region: AWS_REGION ?? 'us-east-1' }), so the AWS/Lambda code path is untouched and
-// "go back to S3" is simply "don't set R2_ENDPOINT" -- no code change.
-//
-// Env contract:
-//   R2_ENDPOINT           https://<account>.r2.cloudflarestorage.com  (presence selects R2)
-//   R2_ACCESS_KEY_ID      R2 S3 access key id
-//   R2_SECRET_ACCESS_KEY  R2 S3 secret access key
-//   KORA_OBJECT_STORE     optional explicit override: 's3' | 'r2'
-//   AWS_REGION            S3 region (default 'us-east-1') in S3 mode
+// Cloudflare R2 uses the S3 protocol, not the retired AWS S3 service. Callers keep using
+// S3Client/commands, but must construct their client during startup so missing R2 settings fail early.
+// Required: R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.
+// KORA_OBJECT_STORE=r2 is accepted for compatibility; s3/other selectors are rejected.
 
-// Structural subset of @aws-sdk/client-s3's S3ClientConfig -- kept inline so this package
-// adds NO new dependency. `new S3Client(objectStoreConfig())` type-checks because every field
-// here is an optional, compatible field of S3ClientConfig.
+/** Structural subset of S3ClientConfig; never permits SDK endpoint/credential discovery. */
 export interface ObjectStoreConfig {
-    region: string;
-    endpoint?: string;
-    credentials?: { accessKeyId: string; secretAccessKey: string };
+    region: 'auto';
+    endpoint: string;
+    credentials: { accessKeyId: string; secretAccessKey: string };
 }
 
-/** True when the object store should be Cloudflare R2 rather than AWS S3. */
-export const isR2ObjectStore = (env: NodeJS.ProcessEnv = process.env): boolean => {
-    if (env.KORA_OBJECT_STORE === 'r2') return true;
-    if (env.KORA_OBJECT_STORE === 's3') return false;
-    return !!env.R2_ENDPOINT;
+/** Require the explicit R2 transport; there is no AWS region, endpoint or credential fallback. */
+export const objectStoreConfig = (env: NodeJS.ProcessEnv = process.env): ObjectStoreConfig => {
+    if (env.KORA_OBJECT_STORE && env.KORA_OBJECT_STORE !== 'r2') {
+        throw new Error('AWS S3 is retired; only Cloudflare R2 is supported (remove KORA_OBJECT_STORE or set it to r2)');
+    }
+    const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = env;
+    if (!R2_ENDPOINT?.trim() || !R2_ACCESS_KEY_ID?.trim() || !R2_SECRET_ACCESS_KEY?.trim()) {
+        throw new Error('R2 object store requires R2_ENDPOINT, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY to all be set before startup');
+    }
+    return {
+        region: 'auto',
+        endpoint: R2_ENDPOINT,
+        credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY }
+    };
 };
 
-/**
- * S3-client config for the active object store; pass straight into `new S3Client(...)`.
- * Returns R2 config when R2 is selected (R2_ENDPOINT or KORA_OBJECT_STORE=r2), otherwise the
- * unchanged AWS S3 config. Throws if R2 is selected without complete R2 credentials.
- */
-export const objectStoreConfig = (env: NodeJS.ProcessEnv = process.env): ObjectStoreConfig => {
-    if (isR2ObjectStore(env)) {
-        const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = env;
-        if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-            throw new Error(
-                'R2 object store selected but R2_ENDPOINT, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY must all be set'
-            );
-        }
-        return {
-            region: 'auto',
-            endpoint: R2_ENDPOINT,
-            credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY }
-        };
-    }
-    return { region: env.AWS_REGION ?? 'us-east-1' };
+/** Compatibility predicate for existing bucket/ACL callers: validate configuration, then always R2. */
+export const isR2ObjectStore = (env: NodeJS.ProcessEnv = process.env): boolean => {
+    objectStoreConfig(env);
+    return true;
 };
