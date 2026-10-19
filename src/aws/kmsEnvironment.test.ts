@@ -1,127 +1,25 @@
-import { decryptKmsCiphertext, hydrateKmsEnvironment, isKmsDisabled, loadAfterHydratingKmsEnvironment } from './kmsEnvironment';
+import { hydrateKmsEnvironment, loadAfterHydratingKmsEnvironment } from './kmsEnvironment';
 
-describe('kmsEnvironment', () => {
-    it('hydrates missing environment values from matching *_ENC keys', async () => {
-        const send = jest.fn().mockResolvedValue({
-            Plaintext: Buffer.from('decoded-secret'),
-        });
-        const env = {
-            API_KEY_ENC: Buffer.from('ciphertext').toString('base64'),
-        } as NodeJS.ProcessEnv;
-
-        const hydrated = await hydrateKmsEnvironment({
-            env,
-            client: { send } as any,
-        });
-
-        expect(hydrated).toEqual(['API_KEY']);
-        expect(env.API_KEY).toBe('decoded-secret');
-        expect(send).toHaveBeenCalledTimes(1);
+// Invariant: no KMS client is ever created and ciphertext settings are rejected, never silently ignored.
+// Failure caught: a leftover *_ENC value would start the service with a missing secret instead of failing.
+// Negative control: restoring the old "skip when disabled" or decrypt behaviour makes the rejection fail.
+describe('retired KMS environment hydration', () => {
+    it('returns no hydrated keys and leaves the environment untouched for plaintext settings', async () => {
+        const env = { API_KEY: 'plain', OTHER: 'x' } as NodeJS.ProcessEnv;
+        await expect(hydrateKmsEnvironment({ env })).resolves.toEqual([]);
+        expect(env).toEqual({ API_KEY: 'plain', OTHER: 'x' });
     });
 
-    it('hydrates missing environment values from KMS_ENV_BUNDLE_ENC before individual keys', async () => {
-        const send = jest.fn().mockResolvedValueOnce({
-            Plaintext: Buffer.from(JSON.stringify({ API_KEY: 'bundle-secret', OTHER_KEY: 'other-secret' })),
-        });
-        const env = {
-            KMS_ENV_BUNDLE_ENC: Buffer.from('ciphertext').toString('base64'),
-            API_KEY_ENC: Buffer.from('ignored').toString('base64'),
-        } as NodeJS.ProcessEnv;
+    it.each([{ KMS_ENV_BUNDLE_ENC: 'ciphertext' }, { API_KEY_ENC: 'ciphertext', API_KEY: 'plain' }])(
+        'rejects encrypted settings: %j', async env => {
+            await expect(hydrateKmsEnvironment({ env: env as NodeJS.ProcessEnv })).rejects.toThrow(/AWS KMS is retired.*_ENC/);
+        }
+    );
 
-        const hydrated = await hydrateKmsEnvironment({
-            env,
-            client: { send } as any,
-        });
-
-        expect(hydrated).toEqual(['API_KEY', 'OTHER_KEY']);
-        expect(env.API_KEY).toBe('bundle-secret');
-        expect(env.OTHER_KEY).toBe('other-secret');
-        expect(send).toHaveBeenCalledTimes(1);
+    it('ignores blank *_ENC settings and loads the module only after validation', async () => {
+        const order: string[] = [];
+        await expect(loadAfterHydratingKmsEnvironment(async () => { order.push('load'); return 7; }, { env: { A_ENC: '' } as NodeJS.ProcessEnv })).resolves.toBe(7);
+        await expect(loadAfterHydratingKmsEnvironment(async () => { order.push('bad'); return 1; }, { env: { A_ENC: 'x' } as NodeJS.ProcessEnv })).rejects.toThrow();
+        expect(order).toEqual(['load']);
     });
-
-    it('leaves existing plaintext values alone', async () => {
-        const send = jest.fn();
-        const env = {
-            API_KEY: 'already-set',
-            API_KEY_ENC: Buffer.from('ciphertext').toString('base64'),
-        } as NodeJS.ProcessEnv;
-
-        const hydrated = await hydrateKmsEnvironment({
-            env,
-            client: { send } as any,
-        });
-
-        expect(hydrated).toEqual([]);
-        expect(env.API_KEY).toBe('already-set');
-        expect(send).not.toHaveBeenCalled();
-    });
-
-    it('fails when the bundle plaintext is not a JSON object', async () => {
-        const send = jest.fn().mockResolvedValue({
-            Plaintext: Buffer.from('not-json'),
-        });
-
-        await expect(
-            hydrateKmsEnvironment({
-                env: {
-                    KMS_ENV_BUNDLE_ENC: Buffer.from('ciphertext').toString('base64'),
-                } as NodeJS.ProcessEnv,
-                client: { send } as any,
-            }),
-        ).rejects.toThrow('KMS env bundle plaintext must be a JSON object');
-    });
-
-    it('fails when KMS does not return plaintext bytes', async () => {
-        const send = jest.fn().mockResolvedValue({});
-
-        await expect(
-            decryptKmsCiphertext(
-                Buffer.from('ciphertext').toString('base64'),
-                { send } as any,
-            ),
-        ).rejects.toThrow('KMS decrypt returned empty plaintext');
-    });
-
-    it('loads the target module after hydrating missing plaintext values', async () => {
-        const send = jest.fn().mockResolvedValue({
-            Plaintext: Buffer.from('decoded-secret'),
-        });
-        const env = {
-            API_KEY_ENC: Buffer.from('ciphertext').toString('base64'),
-        } as NodeJS.ProcessEnv;
-
-        const loaded = await loadAfterHydratingKmsEnvironment(
-            async () => ({ apiKey: env.API_KEY }),
-            {
-                env,
-                client: { send } as any,
-            },
-        );
-
-        expect(loaded).toEqual({ apiKey: 'decoded-secret' });
-        expect(send).toHaveBeenCalledTimes(1);
-    });
-
-    it('skips KMS entirely when KORA_KMS_DISABLED is set (self-host SOPS env)', async () => {
-        const send = jest.fn();
-        const env = {
-            KORA_KMS_DISABLED: 'true',
-            API_KEY: 'from-sops',
-            KMS_ENV_BUNDLE_ENC: Buffer.from('ignored').toString('base64'),
-            OTHER_ENC: Buffer.from('ignored').toString('base64'),
-        } as NodeJS.ProcessEnv;
-
-        const hydrated = await hydrateKmsEnvironment({ env, client: { send } as any });
-
-        expect(hydrated).toEqual([]);
-        expect(send).not.toHaveBeenCalled();
-        expect(env.API_KEY).toBe('from-sops');
-    });
-
-    it('isKmsDisabled reads the KORA_KMS_DISABLED flag', () => {
-        expect(isKmsDisabled({ KORA_KMS_DISABLED: 'true' } as NodeJS.ProcessEnv)).toBe(true);
-        expect(isKmsDisabled({ KORA_KMS_DISABLED: '1' } as NodeJS.ProcessEnv)).toBe(true);
-        expect(isKmsDisabled({} as NodeJS.ProcessEnv)).toBe(false);
-    });
-
 });

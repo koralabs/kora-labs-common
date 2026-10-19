@@ -1,28 +1,14 @@
-import { KMSClient, SignCommand, VerifyCommand } from '@aws-sdk/client-kms';
-import { createSign, createVerify, createPublicKey } from 'crypto';
+import { createSign, createVerify, createPrivateKey, createPublicKey } from 'crypto';
 
-// RS256 (RSASSA_PKCS1_V1_5_SHA_256) sign/verify primitive shared by the JWT-issuing/
-// verifying services (auth.handle.me grant cookie, handle.me/minting session tokens).
+// RS256 (RSASSA-PKCS1-v1_5 / SHA-256) sign/verify primitive shared by the JWT-issuing/verifying
+// services. Keys are LOCAL RSA keys only; AWS KMS signing was retired.
 //
-// It PREFERS a LOCAL RSA key — for the self-hosted deployment with no AWS — and FALLS
-// BACK to AWS KMS (JWT_KEY_ID) when no local key is configured, so existing KMS-backed
-// deployments keep working byte-for-byte and adoption can be gradual.
+//   JWT_PRIVATE_KEY  RSA private key (PEM, or base64-encoded PEM) — required to SIGN. The public half
+//                    is derived from it, so a node holding the private key can also verify.
+//   JWT_PUBLIC_KEY   (optional) RSA public key (PEM/base64) for verify-only nodes.
 //
-//   JWT_PRIVATE_KEY  RSA private key (PEM, or base64-encoded PEM) — used to SIGN. The
-//                    public half is derived from it for verification, so a single shared
-//                    secret (the private key) is enough on every node.
-//   JWT_PUBLIC_KEY   (optional) RSA public key (PEM/base64) for verify-only nodes that
-//                    should not hold the private key.
-//   JWT_KEY_ID       AWS KMS key id/alias (legacy fallback when no local key is set).
-//
-// These callers sign/verify over different bytes (auth signs the payload only; the
-// session-token path signs `header.payload`), so this stays a low-level bytes-in/bytes-out
-// primitive — each service keeps building its own token exactly as before.
-
-const SIGNING_ALGORITHM = 'RSASSA_PKCS1_V1_5_SHA_256';
-
-let _kms: KMSClient | undefined;
-const kms = (): KMSClient => (_kms ??= new KMSClient({}));
+// JWT_KEY_ID is no longer read. Call assertJwtKeysConfigured() at startup so a missing or invalid
+// key fails the service before it accepts traffic, not on the first token.
 
 // Accept a raw PEM or a base64-encoded PEM (single-line, env-friendly).
 const pemFromEnv = (value?: string): string | undefined => {
@@ -45,51 +31,41 @@ const localPublicKey = (): string | undefined => {
     return createPublicKey(priv).export({ type: 'spki', format: 'pem' }).toString();
 };
 
-/** True when a local RSA key is configured (i.e. signing/verifying needs no AWS). */
+/** True when a local RSA key is configured. */
 export const isLocalJwtSigner = (): boolean => !!localPrivateKey() || !!pemFromEnv(process.env.JWT_PUBLIC_KEY);
 
-/** Sign `message` with RS256 — local private key if present, else AWS KMS. */
-export const signRs256 = async (message: Buffer): Promise<Buffer> => {
+/**
+ * Startup check: the required key must exist and be a cryptographically valid RSA key.
+ * `sign` (default) needs JWT_PRIVATE_KEY; `verify` accepts JWT_PUBLIC_KEY or JWT_PRIVATE_KEY.
+ */
+export const assertJwtKeysConfigured = ({ mode = 'sign' }: { mode?: 'sign' | 'verify' } = {}): void => {
     const priv = localPrivateKey();
-    if (priv) {
-        const signer = createSign('RSA-SHA256');
-        signer.update(message);
-        signer.end();
-        return signer.sign(priv);
+    if (mode === 'sign') {
+        if (!priv) throw new Error('JWT_PRIVATE_KEY not configured');
+        if (createPrivateKey(priv).asymmetricKeyType !== 'rsa') throw new Error('JWT_PRIVATE_KEY must be an RSA key');
+        return;
     }
-    const keyId = process.env.JWT_KEY_ID;
-    if (!keyId) throw new Error('JWT_KEY_ID not configured');
-    const response = await kms().send(
-        new SignCommand({
-            KeyId: keyId,
-            Message: new Uint8Array(message),
-            MessageType: 'RAW',
-            SigningAlgorithm: SIGNING_ALGORITHM
-        })
-    );
-    if (!response.Signature) throw new Error('KMS sign returned no signature');
-    return Buffer.from(response.Signature);
+    const pub = localPublicKey();
+    if (!pub) throw new Error('JWT_PUBLIC_KEY or JWT_PRIVATE_KEY not configured');
+    if (createPublicKey(pub).asymmetricKeyType !== 'rsa') throw new Error('JWT public key must be an RSA key');
 };
 
-/** Verify an RS256 `signature` over `message` — local public key if present, else AWS KMS. */
+/** Sign `message` with RS256 using the local private key. */
+export const signRs256 = async (message: Buffer): Promise<Buffer> => {
+    const priv = localPrivateKey();
+    if (!priv) throw new Error('JWT_PRIVATE_KEY not configured');
+    const signer = createSign('RSA-SHA256');
+    signer.update(message);
+    signer.end();
+    return signer.sign(priv);
+};
+
+/** Verify an RS256 `signature` over `message` using the local public key (or the key derived from the private key). */
 export const verifyRs256 = async (message: Buffer, signature: Buffer): Promise<boolean> => {
     const pub = localPublicKey();
-    if (pub) {
-        const verifier = createVerify('RSA-SHA256');
-        verifier.update(message);
-        verifier.end();
-        return verifier.verify(pub, signature);
-    }
-    const keyId = process.env.JWT_KEY_ID;
-    if (!keyId) throw new Error('JWT_KEY_ID not configured');
-    const response = await kms().send(
-        new VerifyCommand({
-            KeyId: keyId,
-            Message: new Uint8Array(message),
-            MessageType: 'RAW',
-            Signature: new Uint8Array(signature),
-            SigningAlgorithm: SIGNING_ALGORITHM
-        })
-    );
-    return !!response.SignatureValid;
+    if (!pub) throw new Error('JWT_PUBLIC_KEY or JWT_PRIVATE_KEY not configured');
+    const verifier = createVerify('RSA-SHA256');
+    verifier.update(message);
+    verifier.end();
+    return verifier.verify(pub, signature);
 };
