@@ -51,8 +51,9 @@ export const createCronArbiter = (
         const observed = await fetchRateLimitedResponse({
             rateLimitKey: `cron-arbiter:${url.origin}`,
             maxRateLimitWaitMs: 0,
-            dispatch: ({ redirect }) => fetcher(url, {
-                method: 'POST', redirect, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), body,
+            requestTimeoutMs: REQUEST_TIMEOUT_MS,
+            dispatch: ({ redirect, signal }) => fetcher(url, {
+                method: 'POST', redirect, signal, body,
                 headers: { 'content-type': 'application/json', 'x-kora-timestamp': timestamp, 'x-kora-signature': signature }
             }),
             readText: response => response.text()

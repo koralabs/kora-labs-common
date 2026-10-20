@@ -21,7 +21,7 @@ export interface RateLimitResponse {
 
 type ProviderFetcher = (
     url: string,
-    init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array; redirect?: 'manual' }
+    init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array; redirect?: 'manual'; signal?: AbortSignal }
 ) => Promise<RateLimitResponse & { ok: boolean; statusText: string; text: () => Promise<string> }>;
 
 type ObservedBody =
@@ -35,13 +35,24 @@ export interface RateLimitedResponse<R> {
     statedWait: boolean;
 }
 
+/** The call's own deadline expired (headers or body never completed). The queue and any caller lock are released. */
+export class RequestTimeoutError extends Error {
+    readonly code = 'ETIMEDOUT';
+    constructor(readonly rateLimitKey: string, readonly timeoutMs: number) {
+        super(`Request for ${rateLimitKey} timed out after ${timeoutMs}ms`);
+        this.name = 'RequestTimeoutError';
+    }
+}
+
 export interface RateLimitedResponseOptions<R extends RateLimitResponse> {
     rateLimitKey: string;
     maxRateLimitWaitMs?: number;
+    /** Hard deadline from dispatch through full body read. Enforced even when `dispatch` ignores `signal`. */
+    requestTimeoutMs?: number;
     /** Omit to retain an unpaced caller's existing concurrency. */
     maxRps?: number;
-    /** The actual producer must honor manual redirects; it must not follow inside this callback. */
-    dispatch: (options: { redirect: 'manual' }) => Promise<R>;
+    /** The actual producer must honor manual redirects; it must not follow inside this callback. Pass `signal` to cancel the socket. */
+    dispatch: (options: { redirect: 'manual'; signal: AbortSignal }) => Promise<R>;
     /** Optional native-error context, without wrapping the fetch promise before header observation. */
     onDispatchError?: (error: unknown) => never;
     /** Consume text for JSON callers; read a clone to preserve a raw Response's body. */
@@ -70,6 +81,8 @@ export interface ProviderRequestOptions {
     retryBaseDelayMs?: number;
     maxRps?: number;
     rateLimitKey?: string;
+    /** Per-attempt deadline (dispatch through body read). Defaults to 30s. */
+    requestTimeoutMs?: number;
     /** Longest server-stated rate-limit wait to sit out in-process; longer waits throw RateLimitedError. */
     maxRateLimitWaitMs?: number;
     fetcher?: ProviderFetcher;
@@ -79,6 +92,7 @@ const DEFAULT_MAX_RPS = 5;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BASE_DELAY_MS = 500;
 const DEFAULT_MAX_RATE_LIMIT_WAIT_MS = 30_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RATE_LIMIT_WAITS = 3;
 
 // 429 is deliberately absent: a rate limit is retried only after the wait the server states (see
@@ -97,6 +111,11 @@ const RETRIABLE_MESSAGE_SNIPPETS = [
 ];
 
 const rateLimitStates = new Map<string, ProviderRateLimitState>();
+
+// The deadline timer is bound at load so a test or caller shim that replaces setTimeout for sleeps
+// (to skip waiting) cannot make every request time out instantly.
+const deadlineTimer = setTimeout;
+const clearDeadline = clearTimeout;
 
 const delay = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
@@ -255,6 +274,7 @@ export const isRetriableError = (provider: ProviderName, error: any): boolean =>
 export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
     rateLimitKey,
     maxRateLimitWaitMs = DEFAULT_MAX_RATE_LIMIT_WAIT_MS,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     maxRps,
     dispatch,
     onDispatchError,
@@ -266,31 +286,49 @@ export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
             // A response can extend the floor in the await continuation gap.
             // No await may separate this final check from actual dispatch.
             if (rateLimitWaitRemainingMs(rateLimitKey) > 0) continue;
+            // One deadline covers dispatch AND the body read. It is a race, not only an abort signal, so a
+            // producer that ignores the signal still cannot hold the same-key queue (or a caller's lock) forever.
+            const controller = new AbortController();
+            let timer: NodeJS.Timeout | undefined;
+            const deadline = new Promise<never>((_, reject) => {
+                timer = deadlineTimer(() => {
+                    const error = new RequestTimeoutError(rateLimitKey, requestTimeoutMs);
+                    controller.abort(error);
+                    reject(error);
+                }, requestTimeoutMs);
+            });
+            deadline.catch(() => undefined);
             let pending: Promise<R>;
             try {
-                pending = dispatch({ redirect: 'manual' });
+                pending = dispatch({ redirect: 'manual', signal: controller.signal });
             } catch (error) {
+                clearDeadline(timer);
                 if (onDispatchError) onDispatchError(error);
                 throw error;
             }
-            return pending.then(async (response) => {
+            pending.catch(() => undefined); // a late failure after the deadline must not become unhandled
+            return Promise.race([pending, deadline]).then(async (response) => {
                 const headerAt = Date.now();
                 const headerWait = statedWaitMs(response.headers, undefined, headerAt, response.status);
                 if (headerWait !== null) recordRateLimit(rateLimitKey, headerWait, headerAt);
                 let text: string;
                 try {
-                    text = await readText(response);
+                    text = await Promise.race([readText(response), deadline]);
                 } catch (error) {
                     // Body failure does not erase the response we already observed.
                     if (typeof error === 'object' && error !== null) observedResponseStatuses.set(error, response.status);
-                    return { response, body: { ok: false, error }, statedWait: headerWait !== null };
+                    // Keep the original response/error for each caller's existing body contract.
+                    return { response, body: { ok: false, error }, statedWait: headerWait !== null } as RateLimitedResponse<R>;
                 }
                 const bodyAt = Date.now();
                 const { value: parsed, parseError } = parseJson(text);
                 const bodyWait = statedWaitMs(undefined, parsed, bodyAt, response.status);
                 if (bodyWait !== null) recordRateLimit(rateLimitKey, bodyWait, bodyAt);
-                return { response, body: { ok: true, text, parsed, parseError }, statedWait: headerWait !== null || bodyWait !== null };
-            }, onDispatchError);
+                return { response, body: { ok: true, text, parsed, parseError }, statedWait: headerWait !== null || bodyWait !== null } as RateLimitedResponse<R>;
+            }, (error) => {
+                if (error instanceof RequestTimeoutError || !onDispatchError) throw error;
+                return onDispatchError(error);
+            }).finally(() => clearDeadline(timer));
         }
     };
     return maxRps === undefined ? start() : runRateLimitedTask(rateLimitKey, maxRps, start);
@@ -307,6 +345,7 @@ export const fetchProviderJson = async <T>({
     maxRetries = DEFAULT_MAX_RETRIES,
     retryBaseDelayMs = DEFAULT_RETRY_BASE_DELAY_MS,
     maxRps = DEFAULT_MAX_RPS,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     rateLimitKey = provider,
     maxRateLimitWaitMs = DEFAULT_MAX_RATE_LIMIT_WAIT_MS,
     fetcher = defaultFetch
@@ -322,8 +361,8 @@ export const fetchProviderJson = async <T>({
         let rateLimited: { waitMs: number | null; error: Error } | undefined;
         try {
             const observed = await fetchRateLimitedResponse({
-                rateLimitKey, maxRateLimitWaitMs, maxRps,
-                dispatch: ({ redirect }) => fetcher(url, { method, headers, body, redirect }),
+                rateLimitKey, maxRateLimitWaitMs, maxRps, requestTimeoutMs,
+                dispatch: ({ redirect, signal }) => fetcher(url, { method, headers, body, redirect, signal }),
                 readText: (response) => response.text()
             });
             if (!observed.body.ok) throw observed.body.error;
@@ -357,6 +396,8 @@ export const fetchProviderJson = async <T>({
                 return parsed as T;
             }
         } catch (error: any) {
+            // A timed-out non-GET may have been applied upstream; never replay it blindly.
+            if (error instanceof RequestTimeoutError && method.toUpperCase() !== 'GET') throw error;
             if (error instanceof RateLimitedError || attempt >= maxRetries || !isRetriableError(provider, error)) {
                 throw error;
             }
