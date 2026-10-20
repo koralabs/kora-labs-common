@@ -55,8 +55,13 @@ export interface RateLimitedResponseOptions<R extends RateLimitResponse> {
     dispatch: (options: { redirect: 'manual'; signal: AbortSignal }) => Promise<R>;
     /** Optional native-error context, without wrapping the fetch promise before header observation. */
     onDispatchError?: (error: unknown) => never;
-    /** Consume text for JSON callers; read a clone to preserve a raw Response's body. */
-    readText: (response: R) => Promise<string>;
+    /**
+     * Optional text reader. When omitted, or when the response body is a Node stream (node-fetch / cross-fetch),
+     * the transport reads the ORIGINAL body once and returns an equivalent response whose body is that buffered
+     * text, so the caller can still read it. Never read a clone here for node-fetch: its tee stalls once the
+     * unread original exceeds ~16KB (the cause of the Minting >300s hang). Native fetch clones are fine.
+     */
+    readText?: (response: R) => Promise<string>;
 }
 
 interface ProviderRateLimitState {
@@ -114,6 +119,32 @@ const rateLimitStates = new Map<string, ProviderRateLimitState>();
 
 // The deadline timer is bound at load so a test or caller shim that replaces setTimeout for sleeps
 // (to skip waiting) cannot make every request time out instantly.
+type BufferableResponse = { body?: { pipe?: unknown }; arrayBuffer?: () => Promise<ArrayBuffer>; text?: () => Promise<string>; constructor: unknown; statusText?: string };
+
+const hasNodeStreamBody = (response: unknown): boolean =>
+    typeof (response as BufferableResponse)?.body?.pipe === 'function';
+
+/** Read the original body exactly once; keep the bytes so the caller's response can be rebuilt. */
+const readOriginalBody = async (response: BufferableResponse): Promise<{ text: string; bytes: ArrayBuffer | undefined }> => {
+    if (typeof response.arrayBuffer === 'function') {
+        const bytes = await response.arrayBuffer();
+        return { text: new TextDecoder().decode(bytes), bytes };
+    }
+    return { text: typeof response.text === 'function' ? await response.text() : '', bytes: undefined };
+};
+
+/** An equivalent, unread response of the SAME class (native Response or node-fetch) carrying the buffered bytes. */
+const rebuildResponse = <R>(original: R, bytes: ArrayBuffer | undefined): R => {
+    if (bytes === undefined) return original;
+    const source = original as unknown as RateLimitResponse & BufferableResponse;
+    const Ctor = source.constructor as new (body: unknown, init: unknown) => R;
+    try {
+        return new Ctor(Buffer.from(bytes), { status: source.status, statusText: source.statusText, headers: source.headers });
+    } catch {
+        return original;
+    }
+};
+
 const deadlineTimer = setTimeout;
 const clearDeadline = clearTimeout;
 
@@ -312,8 +343,15 @@ export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
                 const headerWait = statedWaitMs(response.headers, undefined, headerAt, response.status);
                 if (headerWait !== null) recordRateLimit(rateLimitKey, headerWait, headerAt);
                 let text: string;
+                let delivered: R = response;
                 try {
-                    text = await Promise.race([readText(response), deadline]);
+                    if (readText && !hasNodeStreamBody(response)) {
+                        text = await Promise.race([readText(response), deadline]);
+                    } else {
+                        const buffered = await Promise.race([readOriginalBody(response as unknown as BufferableResponse), deadline]);
+                        text = buffered.text;
+                        delivered = rebuildResponse(response, buffered.bytes);
+                    }
                 } catch (error) {
                     // Body failure does not erase the response we already observed.
                     if (typeof error === 'object' && error !== null) observedResponseStatuses.set(error, response.status);
@@ -324,7 +362,7 @@ export const fetchRateLimitedResponse = <R extends RateLimitResponse>({
                 const { value: parsed, parseError } = parseJson(text);
                 const bodyWait = statedWaitMs(undefined, parsed, bodyAt, response.status);
                 if (bodyWait !== null) recordRateLimit(rateLimitKey, bodyWait, bodyAt);
-                return { response, body: { ok: true, text, parsed, parseError }, statedWait: headerWait !== null || bodyWait !== null } as RateLimitedResponse<R>;
+                return { response: delivered, body: { ok: true, text, parsed, parseError }, statedWait: headerWait !== null || bodyWait !== null } as RateLimitedResponse<R>;
             }, (error) => {
                 if (error instanceof RequestTimeoutError || !onDispatchError) throw error;
                 return onDispatchError(error);
