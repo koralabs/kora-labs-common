@@ -80,6 +80,12 @@ The actual producer must honor the primitive's manual redirect option; the JSON 
 Body applicability is limited to top-level retry_after and error.details RetryInfo (including existing top-level envelope arrays), never recursive business/model/tool/history data. Reset hints apply to non-success responses and exhausted success quotas, not an available successful quota window. Retry-After applies independently of status; the non-X RateLimit-Reset-After alias is supported too. Existing status-aware helper callers remain compatible. These server-only exports stay on the chain subpath, not the root/browser barrel.
 
 
+## Whole-source Test Coverage
+
+PR CI runs `npm test -- --coverage --runInBand --config scripts/jest-coverage.config.cjs` and retains `coverage/coverage-summary.json` as the `coverage-summary` artifact. The denominator includes every executable source module under `src`, including modules never imported by tests; test files and declarations are excluded. Type-only modules have no executable lines. This runs the offline unit suite, not browser journeys or live-chain tests.
+
+Baseline from the 490-test suite: lines **84% (2,805/3,339)**, statements **82.46% (3,371/4,088)**, functions **80.45% (560/696)**, branches **73.22% (2,658/3,630)** across 81 instrumented files. Imported-only collection reports only 65 files and omits untouched modules, so that narrower percentage must not be presented as whole-repository coverage. Negative control: removing the whole-source configuration omits `src/testing/playwright/page.ts`; the whole-source report correctly includes its 24 uncovered lines. Percentages are measurements, not a new pass threshold.
+
 ## npm Release Verification
 
 The master release workflow verifies npm publication with `node scripts/verify-npm-publish.cjs ./lib/package.json` immediately after `npm publish`. It requests the exact scoped name/version endpoint, never `latest`, and succeeds only when registry JSON has the expected name and version. Registry propagation has taken approximately three minutes; the helper allows five minutes overall, polls no faster than every 15 seconds, and bounds each request (headers and body) to 15 seconds or the remaining deadline. Missing/malformed/mismatched metadata, transient network errors, 429s and server errors retry within that window; other HTTP failures stop immediately.
