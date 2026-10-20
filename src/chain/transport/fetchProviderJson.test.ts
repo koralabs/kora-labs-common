@@ -249,7 +249,7 @@ describe('shared raw Response transport', () => {
         const response = new Response(JSON.stringify(payload), { status: status as number, headers: headers as HeadersInit });
         let calls = 0;
         const request = () => fetchRateLimitedResponse({ rateLimitKey: key, maxRateLimitWaitMs: 0,
-            dispatch: async options => { expect(options).toEqual({ redirect: 'manual' }); calls++; return response; },
+            dispatch: async options => { expect(options).toEqual({ redirect: 'manual', signal: expect.any(AbortSignal) }); calls++; return response; },
             readText: res => res.clone().text()
         });
         const observed = await request();
