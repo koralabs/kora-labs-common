@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - master
+    # Tooling/docs-only merges do not publish an unchanged library version.
+    paths-ignore:
+      - '.github/**'
+      - 'scripts/**'
+      - 'docs/**'
   workflow_dispatch:
 permissions:
   id-token: write  # Required for OIDC
@@ -30,7 +35,9 @@ jobs:
       run: npm run lint
 
     - name: Test
-      run: npm run test
+      run: |
+        npm run test
+        node --test scripts/verify-npm-publish.test.cjs
 
     - name: Build
       run: npm run build && cp package.json ./lib/package.json
@@ -42,3 +49,6 @@ jobs:
 
     - name: Publish to npmjs
       run: cd ./lib && npm publish --provenance --access public
+
+    - name: Verify exact version on npmjs
+      run: node scripts/verify-npm-publish.cjs ./lib/package.json
