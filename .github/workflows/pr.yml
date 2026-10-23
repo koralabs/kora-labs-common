@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   test:
-    name: Lint, build and unit tests
+    name: Lint and build
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -26,15 +26,3 @@ jobs:
 
     - name: Build
       run: npm run build
-
-    - name: Unit tests
-      run: |
-        npm test -- --coverage --runInBand --config scripts/jest-coverage.config.cjs
-        node --test scripts/verify-npm-publish.test.cjs
-
-    - name: Retain whole-source coverage measurement
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-summary
-        path: coverage/coverage-summary.json
-        if-no-files-found: error

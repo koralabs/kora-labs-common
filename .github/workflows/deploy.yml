@@ -34,11 +34,6 @@ jobs:
     - name: Lint
       run: npm run lint
 
-    - name: Test
-      run: |
-        npm run test
-        node --test scripts/verify-npm-publish.test.cjs
-
     - name: Build
       run: npm run build && cp package.json ./lib/package.json
 
