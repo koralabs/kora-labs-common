@@ -37,6 +37,10 @@ describe('plutusDataToJson', () => {
         expect(plutusDataToJson(from('a1014161'))).toEqual({ map: [{ k: { int: 1 }, v: { bytes: '61' } }] });
         expect(plutusDataToJson(from('d87a8101'))).toEqual({ constructor: 1, fields: [{ int: 1 }] });
     });
+    it('refuses a Plutus data value of no known kind', () => {
+        const unknown = { asConstrPlutusData: () => undefined, asBoundedBytes: () => undefined, asInteger: () => undefined, asList: () => undefined, asMap: () => undefined };
+        expect(() => plutusDataToJson(unknown as unknown as Serialization.PlutusData)).toThrow('unsupported Plutus data');
+    });
     it('refuses integers outside the safe range', () => {
         expect(() => plutusDataToJson(from('1b' + '0020000000000000'))).toThrow('outside the safe range');
     });
