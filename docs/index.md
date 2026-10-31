@@ -13,3 +13,4 @@
 - [npm Release Verification](./spec/modules-and-data.md#npm-release-verification)
 - [Cron-lock Coordinator](./spec/cron-lock-coordinator.md)
 - [USER_ISSUE Logging Contract](./spec/user-issue-logging.md)
+- [Canonical contract](../CANONICAL_CONTRACT.md) and [.enclave](../.enclave) — invariants and operator-reviewed paths.
