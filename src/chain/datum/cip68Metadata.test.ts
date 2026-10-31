@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { cip68OnchainMetadata, cip68ReferenceOf } from './cip68Metadata';
+import { cip68OnchainMetadata, cip68ReferenceOf, isValidUTF8 } from './cip68Metadata';
 
 const fixtures: { assets: { unit: string; referenceDatum: string; blockfrostOnchainMetadata: Record<string, unknown> }[] } = JSON.parse(
     readFileSync(join(__dirname, 'fixtures', 'cip68PreviewAssets.json'), 'utf8')
@@ -41,5 +41,41 @@ describe('cip68OnchainMetadata', () => {
         expect(cip68ReferenceOf('001bc280abcd')).toEqual({ standard: 'rft', referenceHex: '000643b0abcd' });
         expect(cip68ReferenceOf('000643b0abcd')).toBeNull();
         expect(cip68ReferenceOf('48414c')).toBeNull();
+    });
+});
+
+// Invariant: isValidUTF8 agrees with Node's strict decoder, so a byte string is shown as text only if it truly is UTF-8.
+describe('isValidUTF8', () => {
+    const strict = (b: Buffer) => {
+        try {
+            new TextDecoder('utf-8', { fatal: true }).decode(b);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+    const cases: [string, number[]][] = [
+        ['ascii', [0x68, 0x69]],
+        ['2-byte', [0xc3, 0xa9]],
+        ['3-byte', [0xe2, 0x82, 0xac]],
+        ['4-byte emoji', [0xf0, 0x9f, 0x98, 0x80]],
+        ['truncated 2-byte', [0xc3]],
+        ['bad continuation 2-byte', [0xc3, 0x28]],
+        ['overlong 2-byte', [0xc0, 0x80]],
+        ['truncated 3-byte', [0xe2, 0x82]],
+        ['overlong 3-byte', [0xe0, 0x80, 0x80]],
+        ['surrogate', [0xed, 0xa0, 0x80]],
+        ['truncated 4-byte', [0xf0, 0x9f, 0x98]],
+        ['overlong 4-byte', [0xf0, 0x80, 0x80, 0x80]],
+        ['above U+10FFFF', [0xf4, 0x90, 0x80, 0x80]],
+        ['invalid lead byte', [0xf8, 0x88, 0x80, 0x80, 0x80]],
+        ['lone continuation', [0x80]]
+    ];
+    it.each(cases)('%s', (_n, bytes) => {
+        const buf = Buffer.from(bytes);
+        expect(isValidUTF8(buf)).toBe(strict(buf));
+    });
+    it('accepts only the valid ones among the cases (negative control)', () => {
+        expect(cases.filter(([, b]) => isValidUTF8(Buffer.from(b))).map(([n]) => n)).toEqual(['ascii', '2-byte', '3-byte', '4-byte emoji']);
     });
 });
