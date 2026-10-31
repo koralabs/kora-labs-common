@@ -103,4 +103,39 @@ describe('ChainProviderFailover', () => {
         expect(calls.Koios).toBe(2); // Koios tried again (then falls over to BF)
         expect(calls.Blockfrost).toBe(4);
     });
+
+    // Each public read must forward its own arguments to the provider method of the same name and
+    // return that provider's answer; a wrong method name or dropped arg would break callers.
+    it.each([
+        ['getLatestTransactionForAsset', ['pol', 'hex']],
+        ['getLatestBlock', []],
+        ['getAssets', ['pol']],
+        ['getAssetDatum', ['pol', 'hex']],
+        ['getCip25AssetImage', ['pol', 'hex']],
+        ['getRefScriptCbor', ['tx', 'pol', 'hex']],
+        ['getTxUtxos', ['tx']],
+        ['getAssetUtxo', ['pol', 'hex']],
+        ['getAssetsByStakeKey', ['stake1']],
+        ['getDatumFromHash', ['hash']],
+        ['getBackgroundImageDetails', ['pol', 'hex']],
+        ['getAddressInfo', ['addr1']],
+        ['getAddressUTxOs', ['addr1']],
+        ['getProtocolParameters', []],
+        ['getTxOutputConsumer', ['tx', 3]],
+        ['getAssetOnchainMetadata', ['pol', 'hex']]
+    ] as [keyof ChainProvider, any[]][])('%s forwards args and returns the provider answer', async (method, args) => {
+        const seen: any[][] = [];
+        const impl = { [method]: async (...a: any[]) => { seen.push(a); return `answer-${method}`; } };
+        const failover = new ChainProviderFailover([makeProvider('Blockfrost', impl)], { unhealthyCooldownMs: 0 });
+        expect(await (failover as any)[method](...args)).toBe(`answer-${method}`);
+        expect(seen).toEqual([args]);
+    });
+
+    it('a 404 outranks another provider outage but does not bench the 404 provider', async () => {
+        const notFound = Object.assign(new Error('nf'), { status: 404 });
+        const p1 = makeProvider('Koios', { getAssetDatum: async () => { throw notFound; } });
+        const p2 = makeProvider('Blockfrost', { getAssetDatum: async () => { throw new Error('outage'); } });
+        const failover = new ChainProviderFailover([p1, p2], { unhealthyCooldownMs: 0, random: () => 0 });
+        await expect(failover.getAssetDatum('p', 'h')).rejects.toBe(notFound);
+    });
 });
