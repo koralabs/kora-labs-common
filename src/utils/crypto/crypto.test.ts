@@ -8,6 +8,11 @@ import {
     buildPaymentAddressType,
     buildStakeKey,
     dec2hex,
+    getChallengeFromVerifier,
+    getRandomCodeVerifier,
+    getDateStringFromSlot,
+    getSlotNumberFromDate,
+    sha256,
     decodeAddress,
     getPaymentAddressType,
     getPaymentKeyHash,
@@ -211,5 +216,32 @@ describe('crypto utility coverage', () => {
         expect(dec2hex(255)).toEqual('ff');
         expect(blake2b(hex)).toEqual(blake2b(Buffer.from(hex, 'hex')));
         expect(blake2b(new Uint8Array(Buffer.from(hex, 'hex')), 16)).toHaveLength(32);
+    });
+});
+
+describe('PKCE helpers', () => {
+    it('derives the RFC 7636 appendix B challenge from its verifier', async () => {
+        expect(await getChallengeFromVerifier('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+    });
+
+    it('sha256 hashes the utf-8 text', async () => {
+        expect(Buffer.from(await sha256('abc')).toString('hex')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    });
+
+    it('generates a fresh hex verifier of the requested length', async () => {
+        const a = await getRandomCodeVerifier(64);
+        const b = await getRandomCodeVerifier(64);
+        expect(a).toMatch(/^[0-9a-f]+$/);
+        expect(a.length).toBeGreaterThanOrEqual(64);
+        expect(a).not.toBe(b);
+    });
+});
+
+describe('slot and date conversion (mainnet)', () => {
+    it('maps the Shelley start slot to its start time and back', () => {
+        const shelleyStart = new Date(1596491091 * 1000);
+        expect(getDateStringFromSlot(4924800)).toEqual(shelleyStart);
+        expect(getSlotNumberFromDate(shelleyStart)).toBe(4924800);
+        expect(getSlotNumberFromDate(getDateStringFromSlot(100000000))).toBe(100000000);
     });
 });
