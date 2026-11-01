@@ -69,4 +69,72 @@ describe('Koios read paths', () => {
         responses['/tx_info'] = [];
         await expect(koios().getTxUtxos('deadbeef')).rejects.toThrow(/deadbeef/);
     });
+
+    it('getAssets skips CIP-68 reference tokens and burned (zero supply) assets', async () => {
+        responses['/policy_asset_list'] = [
+            { asset_name: '000643b0aa', total_supply: '1' },
+            { asset_name: '000de140bb', total_supply: '1' },
+            { asset_name: 'cc', total_supply: '0' }
+        ];
+        expect(await koios().getAssets('pol')).toEqual([{ policyId: 'pol', hex: '000de140bb' }]);
+        responses['/policy_asset_list'] = { error: 'x' };
+        expect(await koios().getAssets('pol')).toEqual([]);
+    });
+
+    it('getLatestTransactionForAsset returns the first tx hash or null', async () => {
+        responses['/asset_txs'] = [{ tx_hash: 'h1' }, { tx_hash: 'h0' }];
+        expect(await koios().getLatestTransactionForAsset('pol', '00')).toBe('h1');
+        responses['/asset_txs'] = [];
+        expect(await koios().getLatestTransactionForAsset('pol', '00')).toBeNull();
+    });
+
+    it('getAssetDatum prefers inline datum, falls back to the datum hash lookup, else null', async () => {
+        const asset = [{ policy_id: 'pol', asset_name: '00' }];
+        responses['/asset_utxos'] = [{ datum_hash: 'dh', inline_datum: { bytes: 'INLINE' }, asset_list: asset }];
+        expect(await koios().getAssetDatum('pol', '00')).toBe('INLINE');
+        responses['/asset_utxos'] = [{ datum_hash: 'dh', asset_list: asset }];
+        responses['/datum_info'] = [{ bytes: 'BYHASH' }];
+        expect(await koios().getAssetDatum('pol', '00')).toBe('BYHASH');
+        responses['/datum_info'] = [];
+        expect(await koios().getDatumFromHash('dh')).toBeNull();
+        responses['/asset_utxos'] = [{ datum_hash: null, asset_list: asset }];
+        expect(await koios().getAssetDatum('pol', '00')).toBeNull();
+        responses['/asset_utxos'] = [{ datum_hash: 'dh', asset_list: [{ policy_id: 'other', asset_name: '00' }] }];
+        expect(await koios().getAssetDatum('pol', '00')).toBeNull();
+    });
+
+    it('getAssetUtxo maps the output holding the asset, and is null when no tx or no holder', async () => {
+        responses['/asset_txs'] = [];
+        expect(await koios().getAssetUtxo('pol', '00')).toBeNull();
+        responses['/asset_txs'] = [{ tx_hash: 'h1' }];
+        responses['/tx_info'] = [
+            {
+                tx_hash: 'h1',
+                outputs: [
+                    { address: 'other', asset_list: [], value: '1', tx_index: 0 },
+                    {
+                        address: 'addr_holder',
+                        asset_list: [{ policy_id: 'pol', asset_name: '00', quantity: '1' }],
+                        value: '2000000',
+                        tx_index: 3,
+                        inline_datum: { bytes: 'D' },
+                        datum_hash: 'dh'
+                    }
+                ]
+            }
+        ];
+        expect(await koios().getAssetUtxo('pol', '00')).toEqual({
+            address: 'addr_holder',
+            amount: [
+                { unit: 'pol00', quantity: '1' },
+                { unit: 'lovelace', quantity: '2000000' }
+            ],
+            inline_datum: 'D',
+            output_index: 3,
+            tx_hash: 'h1',
+            data_hash: 'dh'
+        });
+        responses['/tx_info'] = [{ tx_hash: 'h1', outputs: [{ address: 'o', asset_list: [], value: '1', tx_index: 0 }] }];
+        expect(await koios().getAssetUtxo('pol', '00')).toBeNull();
+    });
 });
