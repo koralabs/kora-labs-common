@@ -1,6 +1,9 @@
 import { HandleType, Rarity } from './interfaces';
 import { ScriptType } from './interfaces/ScriptDetails';
-import { buildMetadata, checkHandlePattern } from './utils';
+import { md5 } from 'js-md5';
+import { decodeAddress } from '../utils';
+import { RESPONSE_UNAVAILABLE_LEGENDARY } from './constants';
+import { buildCharacters, buildDrep, buildMetadata, buildNumericModifiers, checkHandlePattern, getRarity } from './utils';
 
 describe('validation tests', () => {
     it('should return true', () => {
@@ -165,5 +168,73 @@ describe('ScriptType', () => {
         expect(ScriptType.MARKETPLACE_CONTRACT).toBe('mkpl');
         expect(ScriptType.DEMI_MINT).toBe('demimnt');
         expect(ScriptType.HAL_MINT_PROXY).toBe('halmntprx');
+    });
+});
+
+describe('handle classification helpers', () => {
+    it.each([
+        ['a', Rarity.legendary],
+        ['ab', Rarity.ultra_rare],
+        ['abc', Rarity.rare],
+        ['abcd', Rarity.common],
+        ['abcdefg', Rarity.common],
+        ['abcdefgh', Rarity.basic]
+    ])('getRarity(%s) is %s', (name, rarity) => {
+        expect(getRarity(name)).toBe(rarity);
+    });
+
+    it.each([
+        ['abc', 'letters'],
+        ['123', 'numbers'],
+        ['a1_', 'letters,numbers,special'],
+        ['a-b.c', 'letters,special']
+    ])('buildCharacters(%s) is %s', (name, expected) => {
+        expect(buildCharacters(name)).toBe(expected);
+    });
+
+    it.each([
+        ['123', ''],
+        ['-5', 'negative'],
+        ['1.5', 'decimal'],
+        ['-1.5', 'negative,decimal'],
+        ['abc', '']
+    ])('buildNumericModifiers(%s) is "%s"', (name, expected) => {
+        expect(buildNumericModifiers(name)).toBe(expected);
+    });
+
+    it('rejects a single-character handle as legendary-unavailable', () => {
+        expect(checkHandlePattern('a')).toEqual({ valid: false, message: RESPONSE_UNAVAILABLE_LEGENDARY });
+    });
+
+    it('marks og handles with their number and never og for subhandles', () => {
+        const base = { handleType: HandleType.HANDLE, cid: 'c' };
+        expect(buildMetadata({ ...base, handleName: 'abc', ogNumber: 7 })).toMatchObject({ og: 1, og_number: 7 });
+        expect(buildMetadata({ ...base, handleName: 'abc' })).toMatchObject({ og: 0, og_number: 0 });
+        expect(buildMetadata({ ...base, handleName: 'abc@root', ogNumber: 7 })).toMatchObject({ og: 0, og_number: 0, numeric_modifiers: '' });
+    });
+});
+
+describe('buildDrep', () => {
+    const address = 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x';
+    const credHex = decodeAddress(address)!.slice(2, 58);
+    const hashFor = (typeByte: string) => md5(Buffer.from(credHex, 'hex')) + typeByte;
+
+    it('returns undefined without an id hash, with a mismatching hash, or for an undecodable address', () => {
+        expect(buildDrep(address)).toBeUndefined();
+        expect(buildDrep(address, 'f'.repeat(34))).toBeUndefined();
+        expect(buildDrep('not-an-address', hashFor('22'))).toBeUndefined();
+    });
+
+    it.each([
+        ['22', 'drep', 'key'],
+        ['23', 'drep', 'script'],
+        ['12', 'cc_cold', 'key'],
+        ['03', 'cc_hot', 'script']
+    ])('type byte %s decodes to %s/%s with the matching credential', (typeByte, type, cred) => {
+        const drep = buildDrep(address, hashFor(typeByte))!;
+        expect(drep).toMatchObject({ type, cred, hex: credHex });
+        expect(drep.cip_105.startsWith(type)).toBe(true);
+        expect(drep.cip_129.startsWith(type)).toBe(true);
+        expect(drep.cip_129).not.toBe(drep.cip_105);
     });
 });
