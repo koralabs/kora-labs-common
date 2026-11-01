@@ -56,4 +56,25 @@ describe('ShortTermCache', () => {
         expect(await cache.get('k', 5000, fetcher)).toBe('ok');
         expect(calls).toBe(2);
     });
+
+    it('delete drops one key so it is re-fetched, leaving others cached', async () => {
+        const cache = new ShortTermCache(() => 1000);
+        let a = 0;
+        let b = 0;
+        await cache.get('a', 5000, async () => ++a);
+        await cache.get('b', 5000, async () => ++b);
+        cache.delete('a');
+        expect(await cache.get('a', 5000, async () => ++a)).toBe(2);
+        expect(await cache.get('b', 5000, async () => ++b)).toBe(1);
+    });
+
+    it('clear drops every key', async () => {
+        const cache = new ShortTermCache(() => 1000);
+        let n = 0;
+        await cache.get('a', 5000, async () => ++n);
+        await cache.get('b', 5000, async () => ++n);
+        cache.clear();
+        expect(await cache.get('a', 5000, async () => ++n)).toBe(3);
+        expect(await cache.get('b', 5000, async () => ++n)).toBe(4);
+    });
 });
