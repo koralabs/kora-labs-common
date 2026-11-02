@@ -1,4 +1,4 @@
-import { isR2ObjectStore, objectStoreConfig } from './objectStore';
+import { isR2ObjectStore, objectStoreConfig, OBJECT_STORE_MAX_ATTEMPTS } from './objectStore';
 
 const R2_ENV: NodeJS.ProcessEnv = {
     R2_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
@@ -24,8 +24,11 @@ describe('R2-only object store', () => {
     it('returns only the explicit R2 endpoint, auto region and R2 credentials', () => {
         expect(objectStoreConfig({ ...R2_ENV, AWS_REGION: 'us-west-2', AWS_ACCESS_KEY_ID: 'not-r2', AWS_SECRET_ACCESS_KEY: 'not-r2' })).toEqual({
             region: 'auto', endpoint: R2_ENV.R2_ENDPOINT,
-            credentials: { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' }
+            credentials: { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' },
+            maxAttempts: OBJECT_STORE_MAX_ATTEMPTS
         });
+        // R2 500 bursts outlast the SDK default of 3 attempts; removing maxAttempts fails this.
+        expect(OBJECT_STORE_MAX_ATTEMPTS).toBeGreaterThan(3);
         expect(isR2ObjectStore(R2_ENV)).toBe(true);
         expect(objectStoreConfig({ ...R2_ENV, KORA_OBJECT_STORE: 'r2' })).toEqual(objectStoreConfig(R2_ENV));
     });

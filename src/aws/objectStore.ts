@@ -8,7 +8,12 @@ export interface ObjectStoreConfig {
     region: 'auto';
     endpoint: string;
     credentials: { accessKeyId: string; secretAccessKey: string };
+    maxAttempts: number;
 }
+
+// R2 answers brief bursts of HTTP 500 "We encountered an internal error" (a few seconds, several requests in a row).
+// The SDK default of 3 attempts (~1s of backoff) ran out inside those bursts and surfaced as ERROR alerts.
+export const OBJECT_STORE_MAX_ATTEMPTS = 6;
 
 /** Require the explicit R2 transport; there is no AWS region, endpoint or credential fallback. */
 export const objectStoreConfig = (env: NodeJS.ProcessEnv = process.env): ObjectStoreConfig => {
@@ -22,7 +27,8 @@ export const objectStoreConfig = (env: NodeJS.ProcessEnv = process.env): ObjectS
     return {
         region: 'auto',
         endpoint: R2_ENDPOINT,
-        credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY }
+        credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+        maxAttempts: OBJECT_STORE_MAX_ATTEMPTS
     };
 };
 
