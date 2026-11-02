@@ -10,31 +10,10 @@ jobs:
     name: Lint, build and unit tests
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 24
-
-    - name: Install
-      run: npm ci
-
-    - name: Lint
-      run: npm run lint
-
-    - name: Build
-      run: npm run build
-
-    - name: Unit tests
-      run: |
-        npm test -- --coverage --runInBand --config scripts/jest-coverage.config.cjs
-        node --test scripts/verify-npm-publish.test.cjs
-
-    - name: Retain whole-source coverage measurement
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-summary
-        path: coverage/coverage-summary.json
-        if-no-files-found: error
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify local test evidence (tests run locally, never in Actions)
+        run: |
+          c=$(jq -er 'select(.result == "pass") | .commit' .local-test-evidence.json) && git diff --quiet "$c" HEAD -- . ':!.local-test-evidence.json' || { echo "::error::no valid local test evidence for this commit: run adahandle-deployments/common/test-evidence.sh record locally and push the evidence commit"; exit 1; }
