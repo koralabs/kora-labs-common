@@ -121,12 +121,12 @@ describe('chain reads', () => {
     it('fetchCip68ExtraFromTx decodes the extra map of the matching output', async () => {
         const policy = 'aa'.repeat(28);
         const unit = `${policy}${LBL_100}${hexOf('bob')}`;
-        const datum = cbor.encode(new cbor.Tagged(121, [new Map(), 1, new Map([[Buffer.from('k'), Buffer.from('v')]])])).toString('hex');
+        const datum = (await cbor.encodeAsync(new cbor.Tagged(121, [new Map(), 1, new Map([[Buffer.from('k'), Buffer.from('v')]])]))).toString('hex');
         const good = fixture({ [`/txs/${HASH}/utxos`]: { outputs: [out(0), { ...out(1), amount: [{ unit, quantity: '1' }], inline_datum: datum }] } });
         const extra = await fetchCip68ExtraFromTx(good.chain, HASH, 'bob');
         expect(cip68Field(extra, 'k')).toBe('v');
         await expect(fetchCip68ExtraFromTx(good.chain, HASH, 'nobody')).rejects.toThrow('no 000643b0 output');
-        const noExtra = cbor.encode(new cbor.Tagged(121, [new Map(), 1, 5])).toString('hex');
+        const noExtra = (await cbor.encodeAsync(new cbor.Tagged(121, [new Map(), 1, 5]))).toString('hex');
         const bad = fixture({ [`/txs/${HASH}/utxos`]: { outputs: [{ ...out(0), amount: [{ unit, quantity: '1' }], inline_datum: noExtra }] } });
         await expect(fetchCip68ExtraFromTx(bad.chain, HASH, 'bob')).rejects.toThrow('no extra map');
     });
